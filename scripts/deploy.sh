@@ -919,6 +919,7 @@ configure_caddy() {
     fi
 
     # Remove any previous blocks cleanly
+    as_root sed -i '/# =* OwnMediaHost =*/,/# =* End OwnMediaHost =*/d' "$caddyfile"
     as_root sed -i '/# >>> OwnMediaHost block >>>/,/# <<< OwnMediaHost block <<</d' "$caddyfile"
     as_root sed -i '/# >>> SELFmedia block >>>/,/# <<< SELFmedia block <<</d' "$caddyfile"
 
@@ -926,7 +927,9 @@ configure_caddy() {
     if [[ "$DEPLOY_MODE" == "unified" ]]; then
         caddy_block=$(cat << EOF
 
-# >>> OwnMediaHost block >>>
+# ============================== OwnMediaHost ==================================
+# ${DOMAIN}   {${BACKEND_PORT}}
+# ==============================================================================
 ${DOMAIN} {
     encode gzip zstd
     request_body {
@@ -948,13 +951,16 @@ ${DOMAIN} {
         file_server
     }
 }
-# <<< OwnMediaHost block <<<
+# ============================ End OwnMediaHost ================================
 EOF
 )
     else
         caddy_block=$(cat << EOF
 
-# >>> OwnMediaHost block >>>
+# ============================== OwnMediaHost ==================================
+# ${FRONTEND_DOMAIN}   {static}
+# ${BACKEND_DOMAIN}    {${BACKEND_PORT}}
+# ==============================================================================
 ${FRONTEND_DOMAIN} {
     encode gzip zstd
     root * /var/www/ownmediahost/dist
@@ -971,7 +977,7 @@ ${BACKEND_DOMAIN} {
         flush_interval -1
     }
 }
-# <<< OwnMediaHost block <<<
+# ============================ End OwnMediaHost ================================
 EOF
 )
     fi

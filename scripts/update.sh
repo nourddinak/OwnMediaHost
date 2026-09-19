@@ -262,13 +262,17 @@ if [ -f /etc/caddy/Caddyfile ] && [ -f "$ENV_ACTIVE" ]; then
     caddy_port=$(as_root grep "^APP_PORT=" "$ENV_ACTIVE" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || echo "5002")
     [ -z "$caddy_port" ] && caddy_port="5002"
 
+    as_root sed -i '/# =* OwnMediaHost =*/,/# =* End OwnMediaHost =*/d' /etc/caddy/Caddyfile
     as_root sed -i '/# >>> OwnMediaHost block >>>/,/# <<< OwnMediaHost block <<</d' /etc/caddy/Caddyfile
     as_root sed -i '/# >>> SELFmedia block >>>/,/# <<< SELFmedia block <<</d' /etc/caddy/Caddyfile
 
     if [[ "$DEPLOY_MODE" == "split" && -n "$FRONTEND_DOMAIN" && -n "$BACKEND_DOMAIN" ]]; then
         cat << EOF | as_root tee -a /etc/caddy/Caddyfile >/dev/null
 
-# >>> OwnMediaHost block >>>
+# ============================== OwnMediaHost ==================================
+# ${FRONTEND_DOMAIN}   {static}
+# ${BACKEND_DOMAIN}    {${caddy_port}}
+# ==============================================================================
 ${FRONTEND_DOMAIN} {
     encode gzip zstd
     root * /var/www/ownmediahost/dist
@@ -285,13 +289,15 @@ ${BACKEND_DOMAIN} {
         flush_interval -1
     }
 }
-# <<< OwnMediaHost block <<<
+# ============================ End OwnMediaHost ================================
 EOF
         log_info "Synchronized 2-domain split Caddy routing (${FRONTEND_DOMAIN} -> UI, ${BACKEND_DOMAIN} -> API)."
     elif [ -n "$caddy_domain" ]; then
         cat << EOF | as_root tee -a /etc/caddy/Caddyfile >/dev/null
 
-# >>> OwnMediaHost block >>>
+# ============================== OwnMediaHost ==================================
+# ${caddy_domain}   {${caddy_port}}
+# ==============================================================================
 ${caddy_domain} {
     encode gzip zstd
     request_body {
@@ -311,7 +317,7 @@ ${caddy_domain} {
         file_server
     }
 }
-# <<< OwnMediaHost block <<<
+# ============================ End OwnMediaHost ================================
 EOF
         log_info "Synchronized unified domain Caddy routing (${caddy_domain})."
     fi
