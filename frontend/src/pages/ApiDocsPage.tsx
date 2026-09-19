@@ -625,10 +625,12 @@ export const ApiDocsPage: React.FC = () => {
   const responseRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
-    // Auto-detect base URL
+    // Auto-detect base URL: prefer explicit backend URL, then API base origin, then current origin
+    const backendUrl = import.meta.env.VITE_BACKEND_URL || '';
     const envBase = import.meta.env.VITE_API_BASE_URL || '';
-    if (envBase && envBase.startsWith('http')) {
-      // Split domain: envBase is like https://api.example.com/api/v1
+    if (backendUrl) {
+      setBaseUrl(backendUrl.replace(/\/+$/, ''));
+    } else if (envBase && envBase.startsWith('http')) {
       const url = new URL(envBase);
       setBaseUrl(`${url.protocol}//${url.host}`);
     } else {
@@ -649,8 +651,7 @@ export const ApiDocsPage: React.FC = () => {
     setLiveResponse(null);
     const start = performance.now();
     try {
-      const effectiveBase = API_BASE.startsWith('http') ? '' : baseUrl;
-      const url = `${effectiveBase}${API_BASE}${ep.path.replace('/api/v1', '')}`;
+      const url = `${baseUrl}${ep.path}`;
       const headers: Record<string, string> = {};
       if (ep.auth && apiKey) {
         headers['X-API-Key'] = apiKey;

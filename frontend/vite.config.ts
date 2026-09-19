@@ -36,6 +36,10 @@ export default defineConfig(({ mode }) => {
           target: backendUrl,
           changeOrigin: true,
         },
+        '/health': {
+          target: backendUrl,
+          changeOrigin: true,
+        },
         '/docs': {
           target: backendUrl,
           changeOrigin: true,
