@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { api, MediaItem } from '../../api/client';
 import { useToast } from '../../context/ToastContext';
 import { copyTextToClipboard } from '../../utils/clipboard';
+import { formatBytes } from '../../utils/formatters';
 
 interface MediaDetailDrawerProps {
   media: MediaItem | null;
@@ -36,12 +37,6 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
   };
 
   const permanentUrl = getAbsoluteUrl(media.url);
-
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
 
   const handleCopy = async (
     text: string,
@@ -88,7 +83,7 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
   const handlePermanentPurge = async () => {
     if (
       !confirm(
-        `Permanently delete "${media.filename}" and ALL related assets (original file, thumbnails, transformed caches, and clean up empty folders)? This cannot be undone.`
+        `Permanently delete "${media.filename}" and ALL related assets (original file, thumbnails, and clean up empty folders)? This cannot be undone.`
       )
     ) {
       return;
@@ -359,7 +354,7 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
                   color: '#ef4444',
                   border: '1px solid rgba(239, 68, 68, 0.35)',
                 }}
-                title="Permanently erase file, thumbnails, transformations, and clean up empty folder"
+                title="Permanently erase file, thumbnails, and clean up empty folder"
               >
                 Delete & Purge All
               </button>
@@ -456,7 +451,7 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
               <span style={{ color: 'var(--text-primary)', wordBreak: 'break-all' }}>{media.filename}</span>
 
               <span style={{ color: 'var(--text-tertiary)' }}>File Size</span>
-              <span>{formatSize(media.file_size)}</span>
+              <span>{formatBytes(media.file_size)}</span>
 
               <span style={{ color: 'var(--text-tertiary)' }}>MIME Type</span>
               <span>{media.mime_type}</span>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api, StorageStats } from '../api/client';
 import { useToast } from '../context/ToastContext';
+import { formatGB, formatMB } from '../utils/formatters';
 
 export const StoragePage: React.FC = () => {
   const { toast } = useToast();
@@ -22,14 +23,6 @@ export const StoragePage: React.FC = () => {
   useEffect(() => {
     fetchStats();
   }, []);
-
-  const formatGB = (bytes: number) => {
-    return (bytes / 1024 / 1024 / 1024).toFixed(2);
-  };
-
-  const formatMB = (bytes: number) => {
-    return (bytes / 1024 / 1024).toFixed(1);
-  };
 
   const diskUsedPercent =
     stats && stats.total_disk_bytes > 0
@@ -139,7 +132,7 @@ export const StoragePage: React.FC = () => {
           >
             <span style={{ fontSize: '14px', fontWeight: 600 }}>Media Platform Breakdown</span>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
               <div
                 style={{
                   background: 'rgba(255,255,255,0.02)',
@@ -188,23 +181,6 @@ export const StoragePage: React.FC = () => {
                 </div>
                 <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
                   generated
-                </div>
-              </div>
-
-              <div
-                style={{
-                  background: 'rgba(255,255,255,0.02)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '12px',
-                }}
-              >
-                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Transform Cache</span>
-                <div style={{ fontSize: '15px', fontWeight: 600, marginTop: '4px' }}>
-                  {formatMB(stats.cache_usage_bytes)} MB
-                </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
-                  reusable
                 </div>
               </div>
             </div>

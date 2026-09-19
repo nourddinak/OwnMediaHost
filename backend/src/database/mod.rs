@@ -144,8 +144,8 @@ async fn seed_initial_data(pool: &DbPool, config: &AppConfig) -> Result<(), AppE
         ("default_visibility", "public".to_string()),
         ("duplicate_handling", "allow".to_string()), // allow | reject | reuse
         ("trash_retention_days", "30".to_string()),
-        ("allowed_image_formats", "jpeg,png,webp,gif".to_string()),
-        ("allowed_video_formats", "mp4,webm,mov,mkv".to_string()),
+        ("allowed_image_formats", config.allowed_image_formats.join(",")),
+        ("allowed_video_formats", config.allowed_video_formats.join(",")),
     ];
 
     for (k, v) in default_settings {

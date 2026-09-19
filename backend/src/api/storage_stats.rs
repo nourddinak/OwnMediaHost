@@ -17,6 +17,7 @@ use crate::{
 pub struct StorageStatsState {
     pub pool: DbPool,
     pub storage: LocalStorageProvider,
+    #[allow(dead_code)]
     pub config: Arc<AppConfig>,
 }
 
@@ -29,7 +30,6 @@ pub struct StorageStatsResponse {
     pub images_usage_bytes: u64,
     pub videos_usage_bytes: u64,
     pub thumbnails_usage_bytes: u64,
-    pub cache_usage_bytes: u64,
     pub total_files_count: i64,
     pub total_images_count: i64,
     pub total_videos_count: i64,
@@ -90,15 +90,12 @@ async fn get_storage_stats(
     let images_path = state.storage.get_full_path("originals/images").unwrap_or_default();
     let videos_path = state.storage.get_full_path("originals/videos").unwrap_or_default();
     let thumbs_path = state.storage.get_full_path("generated/thumbnails").unwrap_or_default();
-    let cache_path = state.storage.get_full_path("generated/transformed").unwrap_or_default();
 
     let images_usage_bytes = calculate_dir_size(&images_path);
     let videos_usage_bytes = calculate_dir_size(&videos_path);
     let thumbnails_usage_bytes = calculate_dir_size(&thumbs_path);
-    let cache_usage_bytes = calculate_dir_size(&cache_path);
 
-    let media_storage_bytes =
-        images_usage_bytes + videos_usage_bytes + thumbnails_usage_bytes + cache_usage_bytes;
+    let media_storage_bytes = images_usage_bytes + videos_usage_bytes + thumbnails_usage_bytes;
 
     Ok(Json(ApiResponse::ok(StorageStatsResponse {
         total_disk_bytes,
@@ -108,7 +105,6 @@ async fn get_storage_stats(
         images_usage_bytes,
         videos_usage_bytes,
         thumbnails_usage_bytes,
-        cache_usage_bytes,
         total_files_count,
         total_images_count,
         total_videos_count,

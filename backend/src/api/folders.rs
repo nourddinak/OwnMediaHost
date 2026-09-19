@@ -19,6 +19,7 @@ use crate::{
 #[derive(Clone)]
 pub struct FoldersState {
     pub pool: DbPool,
+    #[allow(dead_code)]
     pub config: Arc<AppConfig>,
 }
 
@@ -51,29 +52,23 @@ async fn list_folders(
         return Err(AppError::Forbidden("Permission folders:read required".into()));
     }
 
-    let folders: Vec<Folder> = sqlx::query_as("SELECT * FROM folders ORDER BY name ASC")
-        .fetch_all(&state.pool)
-        .await?;
-
-    let mut result = Vec::new();
-    for f in folders {
-        let count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM media WHERE folder_id = ? AND deleted_at IS NULL"
-        )
-        .bind(&f.id)
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or(0);
-
-        result.push(FolderWithCount {
-            id: f.id,
-            name: f.name,
-            parent_id: f.parent_id,
-            media_count: count,
-            created_at: f.created_at,
-            updated_at: f.updated_at,
-        });
-    }
+    let result: Vec<FolderWithCount> = sqlx::query_as(
+        r#"
+        SELECT 
+            f.id,
+            f.name,
+            f.parent_id,
+            COALESCE(COUNT(m.id), 0) as media_count,
+            f.created_at,
+            f.updated_at
+        FROM folders f
+        LEFT JOIN media m ON m.folder_id = f.id AND m.deleted_at IS NULL
+        GROUP BY f.id
+        ORDER BY f.name ASC
+        "#
+    )
+    .fetch_all(&state.pool)
+    .await?;
 
     Ok(Json(ApiResponse::ok(result)))
 }

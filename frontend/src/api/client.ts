@@ -69,7 +69,6 @@ export interface StorageStats {
   images_usage_bytes: number;
   videos_usage_bytes: number;
   thumbnails_usage_bytes: number;
-  cache_usage_bytes: number;
   total_files_count: number;
   total_images_count: number;
   total_videos_count: number;
@@ -161,8 +160,6 @@ export const api = {
     });
     return request<PaginatedResult<MediaItem>>(`/files?${qs.toString()}`);
   },
-
-  getFile: (id: string) => request<MediaItem>(`/files/${id}`),
 
   uploadFile: (
     file: File,

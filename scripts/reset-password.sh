@@ -77,6 +77,11 @@ if [ -n "$NEW_PASS" ]; then
     as_root chmod 600 "$ENV_FILE"
     as_root chown ownmediahost:ownmediahost "$ENV_FILE" 2>/dev/null || as_root chown selfmedia:selfmedia "$ENV_FILE" 2>/dev/null || true
 
+    if [ -f "/opt/ownmediahost/.env" ] && [ "$ENV_FILE" != "/opt/ownmediahost/.env" ]; then
+        as_root sed -i "s|^ADMIN_PASSWORD=.*|ADMIN_PASSWORD=${NEW_PASS}|" "/opt/ownmediahost/.env"
+        as_root chmod 600 "/opt/ownmediahost/.env" 2>/dev/null || true
+    fi
+
     echo -e "${CYAN}${BOLD}[INFO]${RESET} Restarting service to sync database credentials..."
     if as_root systemctl is-active --quiet ownmediahost 2>/dev/null || as_root systemctl is-enabled --quiet ownmediahost 2>/dev/null; then
         as_root systemctl restart ownmediahost

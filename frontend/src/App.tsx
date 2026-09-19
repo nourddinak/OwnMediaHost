@@ -109,12 +109,21 @@ export const App: React.FC = () => {
     setRefreshTrigger((prev) => prev + 1);
   };
 
+  const [selectedFolderId, setSelectedFolderId] = useState<string>('');
+
+  const handleSelectView = (view: PageView) => {
+    if (view !== 'media') {
+      setSelectedFolderId('');
+    }
+    setCurrentView(view);
+  };
+
   return (
     <div className="app-shell">
       {/* Sidebar */}
       <Sidebar
         currentView={currentView}
-        onSelectView={setCurrentView}
+        onSelectView={handleSelectView}
         isOpen={mobileSidebarOpen}
         onCloseMobile={() => setMobileSidebarOpen(false)}
       />
@@ -136,6 +145,7 @@ export const App: React.FC = () => {
               folders={folders}
               refreshTrigger={refreshTrigger}
               onDataChanged={triggerRefresh}
+              folderId={selectedFolderId}
             />
           )}
           {currentView === 'images' && (
@@ -160,7 +170,8 @@ export const App: React.FC = () => {
             <FoldersPage
               folders={folders}
               onRefresh={triggerRefresh}
-              onSelectFolder={(_folderId) => {
+              onSelectFolder={(folderId) => {
+                setSelectedFolderId(folderId);
                 setCurrentView('media');
               }}
             />

@@ -8,8 +8,6 @@ pub mod keys;
 pub mod settings;
 pub mod storage_stats;
 pub mod tags;
-pub mod transform;
-pub mod uploads;
 
 use axum::{
     extract::{DefaultBodyLimit, Request, State},
@@ -33,8 +31,6 @@ use crate::{
 #[derive(Clone)]
 pub struct AppState {
     pub pool: DbPool,
-    pub storage: LocalStorageProvider,
-    pub config: Arc<AppConfig>,
 }
 
 pub fn create_router(
@@ -44,16 +40,13 @@ pub fn create_router(
 ) -> Router {
     let state = AppState {
         pool: pool.clone(),
-        storage: storage.clone(),
-        config: config.clone(),
     };
 
     let api_v1: Router = Router::new()
         .nest("/auth", auth::router(pool.clone(), config.clone()))
         .nest("/files", files::router(pool.clone(), storage.clone(), config.clone()))
-        .nest("/uploads", uploads::router(pool.clone(), storage.clone(), config.clone()))
         .nest("/folders", folders::router(pool.clone(), config.clone()))
-        .nest("/tags", tags::router(pool.clone(), config.clone()))
+        .nest("/tags", tags::router(pool.clone()))
         .nest("/keys", keys::router(pool.clone(), config.clone()))
         .nest("/storage", storage_stats::router(pool.clone(), storage.clone(), config.clone()))
         .nest("/activity", activity::router(pool.clone(), config.clone()))
@@ -61,11 +54,10 @@ pub fn create_router(
         .route("/openapi.json", get(openapi_spec));
 
     let delivery_routes = delivery::router(pool.clone(), storage.clone(), config.clone());
-    let transform_routes = transform::router(pool.clone(), storage.clone(), config.clone());
     let alias_routes = aliases::router(pool.clone(), storage.clone(), config.clone());
 
     Router::new()
-        // Health probes
+        // Health endpoints
         .route("/health", get(health_check))
         .route("/health/live", get(health_live))
         .route("/health/ready", get({
@@ -74,9 +66,8 @@ pub fn create_router(
         }))
         // API Documentation
         .route("/docs", get(swagger_ui))
-        // Static delivery, transformations, and aliases (all Router<()>)
+        // Static delivery and aliases (all Router<()>)
         .merge(delivery_routes)
-        .merge(transform_routes)
         .merge(alias_routes)
         // Main API v1 (Router<()>)
         .nest("/api/v1", api_v1)
@@ -120,7 +111,14 @@ async fn activity_logging_middleware(
         response.headers_mut().insert("X-Request-ID", val);
     }
 
-    if !path.starts_with("/health") && !path.starts_with("/docs") {
+    let is_excluded = path.starts_with("/f/")
+        || path.starts_with("/thumbnails/")
+        || path.starts_with("/a/")
+        || path.starts_with("/health")
+        || path.starts_with("/docs")
+        || path == "/openapi.json";
+
+    if !is_excluded {
         let pool = state.pool.clone();
         let req_id_clone = request_id.clone();
         let method_clone = method.clone();

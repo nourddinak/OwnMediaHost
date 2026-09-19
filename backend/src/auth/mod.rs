@@ -130,6 +130,7 @@ impl AuthIdentity {
         }
     }
 
+    #[allow(dead_code)]
     pub fn api_key_id(&self) -> Option<String> {
         match self {
             AuthIdentity::Admin(_) => None,

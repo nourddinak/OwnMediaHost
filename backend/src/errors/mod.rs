@@ -26,6 +26,7 @@ pub enum AppError {
     Conflict(String),
     PayloadTooLarge(String),
     Internal(String),
+    #[allow(dead_code)]
     Validation(String),
 }
 

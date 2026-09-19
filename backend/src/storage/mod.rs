@@ -1,16 +1,14 @@
 use async_trait::async_trait;
 use std::path::PathBuf;
 use tokio::fs::{self, File};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::io::AsyncWriteExt;
 
 use crate::errors::AppError;
 
 #[async_trait]
 pub trait StorageProvider: Send + Sync {
     async fn write_file(&self, relative_path: &str, data: &[u8]) -> Result<u64, AppError>;
-    async fn read_file(&self, relative_path: &str) -> Result<Vec<u8>, AppError>;
     async fn delete_file(&self, relative_path: &str) -> Result<(), AppError>;
-    async fn delete_dir(&self, relative_path: &str) -> Result<(), AppError>;
     async fn prune_empty_parent_dirs(&self, relative_path: &str) -> Result<(), AppError>;
     async fn file_exists(&self, relative_path: &str) -> Result<bool, AppError>;
     fn get_full_path(&self, relative_path: &str) -> Result<PathBuf, AppError>;
@@ -28,8 +26,6 @@ impl LocalStorageProvider {
             "originals/images",
             "originals/videos",
             "generated/thumbnails",
-            "generated/transformed",
-            "temporary/chunks",
             "database",
         ];
 
@@ -94,30 +90,10 @@ impl StorageProvider for LocalStorageProvider {
         Ok(data.len() as u64)
     }
 
-    async fn read_file(&self, relative_path: &str) -> Result<Vec<u8>, AppError> {
-        let target_path = self.sanitize_path(relative_path)?;
-        if !target_path.exists() {
-            return Err(AppError::NotFound("File not found in storage".into()));
-        }
-
-        let mut file = File::open(&target_path).await?;
-        let mut buffer = Vec::new();
-        file.read_to_end(&mut buffer).await?;
-        Ok(buffer)
-    }
-
     async fn delete_file(&self, relative_path: &str) -> Result<(), AppError> {
         let target_path = self.sanitize_path(relative_path)?;
         if target_path.exists() {
             fs::remove_file(&target_path).await?;
-        }
-        Ok(())
-    }
-
-    async fn delete_dir(&self, relative_path: &str) -> Result<(), AppError> {
-        let target_path = self.sanitize_path(relative_path)?;
-        if target_path.exists() && target_path.is_dir() {
-            fs::remove_dir_all(&target_path).await?;
         }
         Ok(())
     }
@@ -132,7 +108,6 @@ impl StorageProvider for LocalStorageProvider {
                 || dir == self.root_dir.join("originals/videos")
                 || dir == self.root_dir.join("generated")
                 || dir == self.root_dir.join("generated/thumbnails")
-                || dir == self.root_dir.join("generated/transformed")
                 || dir == self.root_dir.join("temporary")
             {
                 break;

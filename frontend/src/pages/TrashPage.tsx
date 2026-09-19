@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api, MediaItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
+import { formatBytes } from '../utils/formatters';
 
 export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChanged }) => {
   const { toast } = useToast();
@@ -117,7 +118,7 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
                 <tr key={item.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                   <td style={{ padding: '12px 18px', fontWeight: 500 }}>{item.filename}</td>
                   <td style={{ padding: '12px 18px', color: 'var(--text-tertiary)' }}>
-                    {(item.file_size / 1024 / 1024).toFixed(1)} MB
+                    {formatBytes(item.file_size)}
                   </td>
                   <td style={{ padding: '12px 18px', color: 'var(--text-tertiary)' }}>
                     {item.deleted_at ? new Date(item.deleted_at).toLocaleDateString() : 'Recently'}

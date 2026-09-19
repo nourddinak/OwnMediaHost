@@ -88,6 +88,143 @@ pub fn router(pool: DbPool, storage: LocalStorageProvider, config: Arc<AppConfig
         .with_state(state)
 }
 
+pub struct ProcessedMedia {
+    pub sha256_hash: String,
+    pub mime_type: String,
+    pub extension: String,
+    pub media_type: String,
+    pub width: Option<i64>,
+    pub height: Option<i64>,
+    pub duration: Option<f64>,
+}
+
+pub async fn process_media_payload(
+    storage: &LocalStorageProvider,
+    file_bytes: &[u8],
+    filename: &str,
+    client_width: Option<i64>,
+    client_height: Option<i64>,
+    client_duration: Option<f64>,
+    thumbnail_bytes: Option<&[u8]>,
+    public_id: &str,
+) -> Result<ProcessedMedia, AppError> {
+    let sha256_hash = {
+        let mut hasher = Sha256::new();
+        hasher.update(file_bytes);
+        hex::encode(hasher.finalize())
+    };
+
+    let (mime_type, extension, media_type) = MediaProcessor::detect_type(file_bytes, filename);
+
+    let mut width = client_width;
+    let mut height = client_height;
+    let duration = client_duration;
+
+    if media_type == "image" && extension != "svg" {
+        if let Ok(meta) = MediaProcessor::extract_image_metadata(file_bytes) {
+            width = Some(meta.width as i64);
+            height = Some(meta.height as i64);
+        }
+    }
+
+    // Persist thumbnail directly (from client canvas or server SIMD resize)
+    let thumb_relative = format!("generated/thumbnails/{}.jpg", public_id);
+    if let Some(t_bytes) = thumbnail_bytes {
+        let _ = storage.write_file(&thumb_relative, t_bytes).await;
+    } else if media_type == "image" && extension != "svg" {
+        if let Ok(resized) = MediaProcessor::generate_thumbnail_jpeg(file_bytes, 400) {
+            let _ = storage.write_file(&thumb_relative, &resized).await;
+        }
+    }
+
+    Ok(ProcessedMedia {
+        sha256_hash,
+        mime_type,
+        extension,
+        media_type,
+        width,
+        height,
+        duration,
+    })
+}
+
+pub async fn validate_allowed_format(
+    pool: &DbPool,
+    media_type: &str,
+    extension: &str,
+) -> Result<(), AppError> {
+    let ext_lower = extension.to_lowercase();
+
+    let allowed_images_str = crate::api::settings::get_setting_or_default(
+        pool,
+        "allowed_image_formats",
+        "jpeg,jpg,png,webp,gif,avif,svg,bmp,ico,tiff,heic",
+    ).await;
+    let allowed_images: Vec<String> = allowed_images_str
+        .split(',')
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    let allowed_videos_str = crate::api::settings::get_setting_or_default(
+        pool,
+        "allowed_video_formats",
+        "mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp",
+    ).await;
+    let allowed_videos: Vec<String> = allowed_videos_str
+        .split(',')
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect();
+
+    if media_type == "image" {
+        if !allowed_images.contains(&ext_lower) {
+            return Err(AppError::BadRequest(format!(
+                "Image format '{}' is not allowed. Allowed image formats: {}",
+                ext_lower, allowed_images_str
+            )));
+        }
+    } else if media_type == "video" {
+        if !allowed_videos.contains(&ext_lower) {
+            return Err(AppError::BadRequest(format!(
+                "Video format '{}' is not allowed. Allowed video formats: {}",
+                ext_lower, allowed_videos_str
+            )));
+        }
+    } else {
+        return Err(AppError::BadRequest(format!(
+            "Unsupported file format '{}'. Only configured image and video formats are accepted.",
+            ext_lower
+        )));
+    }
+
+    Ok(())
+}
+
+pub async fn sync_media_tags(pool: &DbPool, media_id: &str, tags: &[String]) -> Result<(), AppError> {
+    for t in tags {
+        let clean = t.trim().to_lowercase();
+        if clean.is_empty() {
+            continue;
+        }
+        let tag_id = format!("tag_{}", uuid::Uuid::new_v4().simple());
+        let _ = sqlx::query("INSERT INTO tags (id, name) VALUES (?, ?) ON CONFLICT(name) DO NOTHING")
+            .bind(&tag_id)
+            .bind(&clean)
+            .execute(pool)
+            .await;
+
+        let _ = sqlx::query(
+            "INSERT INTO media_tags (media_id, tag_id) SELECT ?, id FROM tags WHERE name = ? ON CONFLICT DO NOTHING"
+        )
+        .bind(media_id)
+        .bind(&clean)
+        .execute(pool)
+        .await;
+    }
+    Ok(())
+}
+
 async fn upload_file(
     State(state): State<FilesState>,
     RequireAuth(identity): RequireAuth,
@@ -105,8 +242,8 @@ async fn upload_file(
     let mut client_duration: Option<f64> = None;
     let mut folder_id: Option<String> = None;
     let mut alias: Option<String> = None;
-    let mut visibility = "public".to_string();
-    let mut duplicate_mode = "allow".to_string(); // "allow" | "reject" | "reuse"
+    let mut visibility = crate::api::settings::get_setting_or_default(&state.pool, "default_visibility", "public").await;
+    let mut duplicate_mode = crate::api::settings::get_setting_or_default(&state.pool, "duplicate_handling", "allow").await;
     let mut tags: Vec<String> = Vec::new();
 
     while let Some(field) = multipart
@@ -199,19 +336,31 @@ async fn upload_file(
         return Err(AppError::BadRequest("No file uploaded or file is empty".into()));
     }
 
-    // Compute SHA-256
-    let sha256_hash = {
-        let mut hasher = Sha256::new();
-        hasher.update(&file_bytes);
-        hex::encode(hasher.finalize())
-    };
+    // Generate public ID (clean 8-character hex) and media ID
+    let media_id = format!("med_{}", uuid::Uuid::new_v4().simple());
+    let public_id = hex::encode(&rand::random::<[u8; 4]>());
+
+    let processed = process_media_payload(
+        &state.storage,
+        &file_bytes,
+        &original_filename,
+        client_width,
+        client_height,
+        client_duration,
+        thumbnail_bytes.as_deref(),
+        &public_id,
+    )
+    .await?;
+
+    // Validate allowed formats
+    validate_allowed_format(&state.pool, &processed.media_type, &processed.extension).await?;
 
     // Duplicate detection check
     if duplicate_mode == "reject" || duplicate_mode == "reuse" {
         let existing: Option<Media> = sqlx::query_as(
             "SELECT * FROM media WHERE sha256 = ? AND deleted_at IS NULL LIMIT 1"
         )
-        .bind(&sha256_hash)
+        .bind(&processed.sha256_hash)
         .fetch_optional(&state.pool)
         .await?;
 
@@ -225,73 +374,40 @@ async fn upload_file(
         }
     }
 
-    // Detect MIME and media type
-    let (mime_type, extension, media_type) =
-        MediaProcessor::detect_type(&file_bytes, &original_filename);
-
     // Validate size limits
-    if media_type == "image" && file_bytes.len() as u64 > state.config.max_image_size {
+    if processed.media_type == "image" && file_bytes.len() as u64 > state.config.max_image_size {
         return Err(AppError::PayloadTooLarge(format!(
             "Maximum image upload size is {} MB",
             state.config.max_image_size / 1024 / 1024
         )));
-    } else if media_type == "video" && file_bytes.len() as u64 > state.config.max_video_size {
+    } else if processed.media_type == "video" && file_bytes.len() as u64 > state.config.max_video_size {
         return Err(AppError::PayloadTooLarge(format!(
             "Maximum video upload size is {} GB",
             state.config.max_video_size / 1024 / 1024 / 1024
         )));
     }
 
-    // Generate public ID (clean 8-character hex/nanoid) and media ID
-    let media_id = format!("med_{}", uuid::Uuid::new_v4().simple());
-    let public_id = hex::encode(&rand::random::<[u8; 4]>());
-
     let sanitized_filename = if original_filename.is_empty() {
-        format!("{}.{}", public_id, extension)
+        format!("{}.{}", public_id, processed.extension)
     } else {
         original_filename.clone()
     };
 
     // Generate safe storage path and write file
     let storage_path =
-        LocalStorageProvider::generate_storage_path(&media_type, &public_id, &extension);
+        LocalStorageProvider::generate_storage_path(&processed.media_type, &public_id, &processed.extension);
     state.storage.write_file(&storage_path, &file_bytes).await?;
 
     let file_size = file_bytes.len() as i64;
-    let mut width: Option<i64> = client_width;
-    let mut height: Option<i64> = client_height;
-    let duration: Option<f64> = client_duration;
+    let width = processed.width;
+    let height = processed.height;
+    let duration = processed.duration;
     let video_codec: Option<String> = None;
     let audio_codec: Option<String> = None;
     let bitrate: Option<i64> = None;
     let frame_rate: Option<f64> = None;
 
-    if media_type == "image" {
-        if let Ok(meta) = MediaProcessor::extract_image_metadata(&file_bytes) {
-            width = Some(meta.width as i64);
-            height = Some(meta.height as i64);
-        }
-    }
-
-    // Persist thumbnail directly (from client canvas or pure Rust image resize)
-    let thumb_relative = format!("generated/thumbnails/{}.jpg", public_id);
-    if let Some(t_bytes) = thumbnail_bytes {
-        let _ = state.storage.write_file(&thumb_relative, &t_bytes).await;
-    } else if media_type == "image" {
-        if let Ok((resized, _)) = MediaProcessor::transform_image(
-            &file_bytes,
-            &crate::media::TransformParams {
-                width: Some(400),
-                height: Some(400),
-                fit: Some("cover".to_string()),
-                format: Some("jpeg".to_string()),
-                quality: Some(85),
-                ..Default::default()
-            },
-        ) {
-            let _ = state.storage.write_file(&thumb_relative, &resized).await;
-        }
-    } else if media_type == "video" && (width.is_none() || height.is_none()) {
+    if processed.media_type == "video" && (width.is_none() || height.is_none()) {
         // Fallback: only enqueue background job if client was unable to supply dimensions
         let payload = serde_json::to_value(VideoJobPayload {
             media_id: media_id.clone(),
@@ -324,9 +440,9 @@ async fn upload_file(
     .bind(&public_id)
     .bind(&sanitized_filename)
     .bind(&original_filename)
-    .bind(&extension)
-    .bind(&mime_type)
-    .bind(&media_type)
+    .bind(&processed.extension)
+    .bind(&processed.mime_type)
+    .bind(&processed.media_type)
     .bind(&storage_path)
     .bind(file_size)
     .bind(width)
@@ -336,7 +452,7 @@ async fn upload_file(
     .bind(&audio_codec)
     .bind(bitrate)
     .bind(frame_rate)
-    .bind(&sha256_hash)
+    .bind(&processed.sha256_hash)
     .bind(&visibility)
     .bind(&folder_id)
     .bind(&now)
@@ -344,27 +460,8 @@ async fn upload_file(
     .execute(&state.pool)
     .await?;
 
-    // Handle Tags
-    for tag_name in &tags {
-        let tag_id = format!("tag_{}", uuid::Uuid::new_v4().simple());
-        let _ = sqlx::query("INSERT INTO tags (id, name) VALUES (?, ?) ON CONFLICT(name) DO NOTHING")
-            .bind(&tag_id)
-            .bind(tag_name)
-            .execute(&state.pool)
-            .await;
-
-        let actual_tag_id: String = sqlx::query_scalar("SELECT id FROM tags WHERE name = ?")
-            .bind(tag_name)
-            .fetch_one(&state.pool)
-            .await
-            .unwrap_or(tag_id);
-
-        let _ = sqlx::query("INSERT INTO media_tags (media_id, tag_id) VALUES (?, ?) ON CONFLICT DO NOTHING")
-            .bind(&media_id)
-            .bind(&actual_tag_id)
-            .execute(&state.pool)
-            .await;
-    }
+    // Handle Tags via consolidated batch linking
+    sync_media_tags(&state.pool, &media_id, &tags).await?;
 
     // Handle Alias if provided
     if let Some(alias_path) = &alias {
@@ -387,9 +484,9 @@ async fn upload_file(
         public_id,
         filename: sanitized_filename,
         original_filename,
-        extension,
-        mime_type,
-        media_type,
+        extension: processed.extension,
+        mime_type: processed.mime_type,
+        media_type: processed.media_type,
         storage_provider: "local".to_string(),
         storage_path,
         file_size,
@@ -400,7 +497,7 @@ async fn upload_file(
         audio_codec,
         bitrate,
         frame_rate,
-        sha256: sha256_hash,
+        sha256: processed.sha256_hash,
         visibility,
         folder_id,
         created_at: now.clone(),
@@ -425,87 +522,84 @@ async fn list_files(
     let limit = query.limit.unwrap_or(50).clamp(1, 200);
     let offset = query.offset.unwrap_or(0).max(0);
 
-    let mut sql = "SELECT * FROM media WHERE ".to_string();
-    let mut count_sql = "SELECT COUNT(*) FROM media WHERE ".to_string();
-
-    let mut conditions = Vec::new();
-
-    // Trash filter
-    if query.trash.unwrap_or(false) {
-        conditions.push("deleted_at IS NOT NULL".to_string());
-    } else {
-        conditions.push("deleted_at IS NULL".to_string());
-    }
-
-    // Media type filter
-    if let Some(m_type) = &query.media_type {
-        if m_type == "image" || m_type == "video" {
-            conditions.push(format!("media_type = '{}'", m_type));
-        }
-    }
-
-    // Folder filter
-    if let Some(f_id) = &query.folder_id {
-        if f_id == "root" || f_id == "none" {
-            conditions.push("folder_id IS NULL".to_string());
+    let apply_filters = |builder: &mut sqlx::QueryBuilder<'_, sqlx::Sqlite>| {
+        if query.trash.unwrap_or(false) {
+            builder.push("deleted_at IS NOT NULL");
         } else {
-            conditions.push(format!("folder_id = '{}'", f_id.replace('\'', "''")));
+            builder.push("deleted_at IS NULL");
         }
-    }
 
-    // Visibility filter
-    if let Some(vis) = &query.visibility {
-        conditions.push(format!("visibility = '{}'", vis.replace('\'', "''")));
-    }
-
-    // Search filter
-    if let Some(search) = &query.search {
-        let clean_search = search.trim().replace('\'', "''");
-        if !clean_search.is_empty() {
-            conditions.push(format!(
-                "(filename LIKE '%{0}%' OR original_filename LIKE '%{0}%' OR public_id LIKE '%{0}%')",
-                clean_search
-            ));
+        if let Some(m_type) = &query.media_type {
+            if m_type == "image" || m_type == "video" {
+                builder.push(" AND media_type = ");
+                builder.push_bind(m_type.clone());
+            }
         }
-    }
 
-    // Tag filter
-    if let Some(tag_name) = &query.tag {
-        let clean_tag = tag_name.trim().replace('\'', "''");
-        if !clean_tag.is_empty() {
-            conditions.push(format!(
-                "id IN (SELECT media_id FROM media_tags JOIN tags ON media_tags.tag_id = tags.id WHERE tags.name = '{}')",
-                clean_tag
-            ));
+        if let Some(f_id) = &query.folder_id {
+            if f_id == "root" || f_id == "none" {
+                builder.push(" AND folder_id IS NULL");
+            } else {
+                builder.push(" AND folder_id = ");
+                builder.push_bind(f_id.clone());
+            }
         }
-    }
 
-    let where_clause = conditions.join(" AND ");
-    sql.push_str(&where_clause);
-    count_sql.push_str(&where_clause);
+        if let Some(vis) = &query.visibility {
+            builder.push(" AND visibility = ");
+            builder.push_bind(vis.clone());
+        }
 
-    // Sorting
-    let order_by = match query.sort.as_deref() {
-        Some("oldest") => "ORDER BY created_at ASC",
-        Some("largest") => "ORDER BY file_size DESC",
-        Some("smallest") => "ORDER BY file_size ASC",
-        Some("filename") => "ORDER BY filename ASC",
-        _ => "ORDER BY created_at DESC", // default "newest"
+        if let Some(search) = &query.search {
+            let clean_search = search.trim();
+            if !clean_search.is_empty() {
+                let pattern = format!("%{}%", clean_search);
+                builder.push(" AND (filename LIKE ");
+                builder.push_bind(pattern.clone());
+                builder.push(" OR original_filename LIKE ");
+                builder.push_bind(pattern.clone());
+                builder.push(" OR public_id LIKE ");
+                builder.push_bind(pattern);
+                builder.push(")");
+            }
+        }
+
+        if let Some(tag_name) = &query.tag {
+            let clean_tag = tag_name.trim();
+            if !clean_tag.is_empty() {
+                builder.push(" AND id IN (SELECT media_id FROM media_tags JOIN tags ON media_tags.tag_id = tags.id WHERE tags.name = ");
+                builder.push_bind(clean_tag.to_string());
+                builder.push(")");
+            }
+        }
     };
 
-    sql.push_str(&format!(" {} LIMIT {} OFFSET {}", order_by, limit, offset));
+    // 1. Count total matching rows
+    let mut count_builder = sqlx::QueryBuilder::<sqlx::Sqlite>::new("SELECT COUNT(*) FROM media WHERE ");
+    apply_filters(&mut count_builder);
+    let total: i64 = count_builder.build_query_scalar().fetch_one(&state.pool).await.unwrap_or(0);
 
-    let total: i64 = sqlx::query_scalar(&count_sql)
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or(0);
+    // 2. Select page of rows
+    let mut select_builder = sqlx::QueryBuilder::<sqlx::Sqlite>::new("SELECT * FROM media WHERE ");
+    apply_filters(&mut select_builder);
 
-    let media_rows: Vec<Media> = sqlx::query_as(&sql).fetch_all(&state.pool).await?;
+    match query.sort.as_deref() {
+        Some("oldest") => select_builder.push(" ORDER BY created_at ASC"),
+        Some("largest") => select_builder.push(" ORDER BY file_size DESC"),
+        Some("smallest") => select_builder.push(" ORDER BY file_size ASC"),
+        Some("filename") => select_builder.push(" ORDER BY filename ASC"),
+        _ => select_builder.push(" ORDER BY created_at DESC"),
+    };
 
-    let mut items = Vec::new();
-    for m in &media_rows {
-        items.push(format_media_response(&state.pool, m, &state.config).await?);
-    }
+    select_builder.push(" LIMIT ");
+    select_builder.push_bind(limit);
+    select_builder.push(" OFFSET ");
+    select_builder.push_bind(offset);
+
+    let media_rows: Vec<Media> = select_builder.build_query_as().fetch_all(&state.pool).await?;
+
+    // 3. Batch format responses (eliminates N+1 query loop)
+    let items = format_media_responses_batch(&state.pool, &media_rows, &state.config).await?;
 
     let has_more = offset + (items.len() as i64) < total;
 
@@ -592,46 +686,23 @@ async fn replace_file_content(
         return Err(AppError::BadRequest("No replacement file provided".into()));
     }
 
-    let (new_mime, new_ext, new_type) = MediaProcessor::detect_type(&new_bytes, &new_filename);
+    let processed = process_media_payload(
+        &state.storage,
+        &new_bytes,
+        &new_filename,
+        media.width,
+        media.height,
+        media.duration,
+        new_thumbnail_bytes.as_deref(),
+        &media.public_id,
+    )
+    .await?;
 
-    let new_sha256 = {
-        let mut hasher = Sha256::new();
-        hasher.update(&new_bytes);
-        hex::encode(hasher.finalize())
-    };
+    // Validate allowed formats
+    validate_allowed_format(&state.pool, &processed.media_type, &processed.extension).await?;
 
     // Overwrite physical file at storage_path
     state.storage.write_file(&media.storage_path, &new_bytes).await?;
-
-    let mut width = media.width;
-    let mut height = media.height;
-
-    if new_type == "image" {
-        if let Ok(meta) = MediaProcessor::extract_image_metadata(&new_bytes) {
-            width = Some(meta.width as i64);
-            height = Some(meta.height as i64);
-        }
-    }
-
-    // Update thumbnail
-    let thumb_relative = format!("generated/thumbnails/{}.jpg", media.public_id);
-    if let Some(t_bytes) = new_thumbnail_bytes {
-        let _ = state.storage.write_file(&thumb_relative, &t_bytes).await;
-    } else if new_type == "image" {
-        if let Ok((resized, _)) = MediaProcessor::transform_image(
-            &new_bytes,
-            &crate::media::TransformParams {
-                width: Some(400),
-                height: Some(400),
-                fit: Some("cover".to_string()),
-                format: Some("jpeg".to_string()),
-                quality: Some(85),
-                ..Default::default()
-            },
-        ) {
-            let _ = state.storage.write_file(&thumb_relative, &resized).await;
-        }
-    }
 
     let now = chrono::Utc::now().to_rfc3339();
 
@@ -639,23 +710,27 @@ async fn replace_file_content(
         "UPDATE media SET file_size = ?, mime_type = ?, extension = ?, sha256 = ?, width = ?, height = ?, updated_at = ? WHERE id = ?"
     )
     .bind(new_bytes.len() as i64)
-    .bind(&new_mime)
-    .bind(&new_ext)
-    .bind(&new_sha256)
-    .bind(width)
-    .bind(height)
+    .bind(&processed.mime_type)
+    .bind(&processed.extension)
+    .bind(&processed.sha256_hash)
+    .bind(processed.width)
+    .bind(processed.height)
     .bind(&now)
     .bind(&media.id)
     .execute(&state.pool)
     .await?;
 
-    let updated_media: Media = sqlx::query_as("SELECT * FROM media WHERE id = ?")
-        .bind(&media.id)
-        .fetch_one(&state.pool)
-        .await?;
+    let mut updated_media = media;
+    updated_media.file_size = new_bytes.len() as i64;
+    updated_media.mime_type = processed.mime_type;
+    updated_media.extension = processed.extension;
+    updated_media.sha256 = processed.sha256_hash;
+    updated_media.width = processed.width;
+    updated_media.height = processed.height;
+    updated_media.updated_at = now;
 
     let response = format_media_response(&state.pool, &updated_media, &state.config).await?;
-    info!("Replaced content for media {} successfully.", media.id);
+    info!("Replaced content for media {} successfully.", updated_media.id);
     Ok(Json(ApiResponse::ok(response)))
 }
 
@@ -719,31 +794,8 @@ async fn update_file(
             .execute(&state.pool)
             .await?;
 
-        // Add new tags
-        for t in tags {
-            let clean = t.trim().to_lowercase();
-            if clean.is_empty() {
-                continue;
-            }
-            let tag_id = format!("tag_{}", uuid::Uuid::new_v4().simple());
-            let _ = sqlx::query("INSERT INTO tags (id, name) VALUES (?, ?) ON CONFLICT(name) DO NOTHING")
-                .bind(&tag_id)
-                .bind(&clean)
-                .execute(&state.pool)
-                .await;
-
-            let actual_id: String = sqlx::query_scalar("SELECT id FROM tags WHERE name = ?")
-                .bind(&clean)
-                .fetch_one(&state.pool)
-                .await
-                .unwrap_or(tag_id);
-
-            let _ = sqlx::query("INSERT INTO media_tags (media_id, tag_id) VALUES (?, ?) ON CONFLICT DO NOTHING")
-                .bind(&media.id)
-                .bind(&actual_id)
-                .execute(&state.pool)
-                .await;
-        }
+        // Add new tags via consolidated batch linking
+        sync_media_tags(&state.pool, &media.id, &tags).await?;
     }
 
     let updated: Media = sqlx::query_as("SELECT * FROM media WHERE id = ?")
@@ -755,28 +807,25 @@ async fn update_file(
     Ok(Json(ApiResponse::ok(res)))
 }
 
-async fn purge_media_artifacts(
-    state: &FilesState,
+pub async fn purge_media_artifacts_internal(
+    pool: &DbPool,
+    storage: &LocalStorageProvider,
     media: &Media,
     cleanup_empty_folder: bool,
 ) -> Result<(), AppError> {
     // 1. Delete physical original file from disk
-    let _ = state.storage.delete_file(&media.storage_path).await;
+    let _ = storage.delete_file(&media.storage_path).await;
 
     // 2. Prune empty parent directories on disk (e.g. originals/images/YYYY/MM/prefix)
-    let _ = state.storage.prune_empty_parent_dirs(&media.storage_path).await;
+    let _ = storage.prune_empty_parent_dirs(&media.storage_path).await;
 
-    // 3. Delete thumbnails (jpg, webp, and directory if any)
+    // 3. Delete thumbnails (jpg, webp)
     let thumb_jpg = format!("generated/thumbnails/{}.jpg", media.public_id);
     let thumb_webp = format!("generated/thumbnails/{}.webp", media.public_id);
-    let _ = state.storage.delete_file(&thumb_jpg).await;
-    let _ = state.storage.delete_file(&thumb_webp).await;
-    let _ = state.storage.delete_dir(&format!("generated/thumbnails/{}", media.public_id)).await;
+    let _ = storage.delete_file(&thumb_jpg).await;
+    let _ = storage.delete_file(&thumb_webp).await;
 
-    // 4. Delete transformed cached images and folder for this public_id
-    let _ = state.storage.delete_dir(&format!("generated/transformed/{}", media.public_id)).await;
-
-    // 5. Clean up associated folder in DB if requested and this was the last media item
+    // 4. Clean up associated folder in DB if requested and this was the last media item
     if cleanup_empty_folder {
         if let Some(ref folder_id) = media.folder_id {
             let count: i64 = sqlx::query_scalar(
@@ -784,7 +833,7 @@ async fn purge_media_artifacts(
             )
             .bind(folder_id)
             .bind(&media.id)
-            .fetch_one(&state.pool)
+            .fetch_one(pool)
             .await
             .unwrap_or(1);
 
@@ -792,24 +841,32 @@ async fn purge_media_artifacts(
                 info!("Auto-cleaning empty folder {} after media deletion", folder_id);
                 let _ = sqlx::query("DELETE FROM folders WHERE id = ?")
                     .bind(folder_id)
-                    .execute(&state.pool)
+                    .execute(pool)
                     .await;
             }
         }
     }
 
-    // 6. Delete database record (cascades to media_tags, aliases)
+    // 5. Delete database record (cascades to media_tags, aliases)
     sqlx::query("DELETE FROM media WHERE id = ?")
         .bind(&media.id)
-        .execute(&state.pool)
+        .execute(pool)
         .await?;
 
-    // 7. Clean up orphan tags that have no media remaining
+    // 6. Clean up orphan tags that have no media remaining
     let _ = sqlx::query("DELETE FROM tags WHERE id NOT IN (SELECT DISTINCT tag_id FROM media_tags)")
-        .execute(&state.pool)
+        .execute(pool)
         .await;
 
     Ok(())
+}
+
+async fn purge_media_artifacts(
+    state: &FilesState,
+    media: &Media,
+    cleanup_empty_folder: bool,
+) -> Result<(), AppError> {
+    purge_media_artifacts_internal(&state.pool, &state.storage, media, cleanup_empty_folder).await
 }
 
 async fn soft_delete_file(
@@ -1050,75 +1107,129 @@ async fn sign_private_file(
     }))))
 }
 
+pub async fn format_media_responses_batch(
+    pool: &DbPool,
+    media_list: &[Media],
+    config: &AppConfig,
+) -> Result<Vec<MediaResponse>, AppError> {
+    if media_list.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    use std::collections::HashMap;
+
+    let media_ids: Vec<&str> = media_list.iter().map(|m| m.id.as_str()).collect();
+
+    // 1. Batch load folder names
+    let folder_ids: Vec<&str> = media_list
+        .iter()
+        .filter_map(|m| m.folder_id.as_deref())
+        .collect();
+
+    let folder_map: HashMap<String, String> = if !folder_ids.is_empty() {
+        let mut builder = sqlx::QueryBuilder::<sqlx::Sqlite>::new("SELECT id, name FROM folders WHERE id IN (");
+        let mut separated = builder.separated(", ");
+        for f_id in folder_ids {
+            separated.push_bind(f_id);
+        }
+        separated.push_unseparated(")");
+        let rows: Vec<(String, String)> = builder.build_query_as().fetch_all(pool).await.unwrap_or_default();
+        rows.into_iter().collect()
+    } else {
+        HashMap::new()
+    };
+
+    // 2. Batch load tags
+    let mut tag_map: HashMap<String, Vec<String>> = HashMap::new();
+    {
+        let mut builder = sqlx::QueryBuilder::<sqlx::Sqlite>::new(
+            "SELECT media_tags.media_id, tags.name FROM tags JOIN media_tags ON tags.id = media_tags.tag_id WHERE media_tags.media_id IN ("
+        );
+        let mut separated = builder.separated(", ");
+        for m_id in &media_ids {
+            separated.push_bind(*m_id);
+        }
+        separated.push_unseparated(")");
+        let rows: Vec<(String, String)> = builder.build_query_as().fetch_all(pool).await.unwrap_or_default();
+        for (m_id, tag_name) in rows {
+            tag_map.entry(m_id).or_default().push(tag_name);
+        }
+    }
+
+    // 3. Batch load aliases
+    let mut alias_map: HashMap<String, Vec<String>> = HashMap::new();
+    {
+        let mut builder = sqlx::QueryBuilder::<sqlx::Sqlite>::new(
+            "SELECT media_id, alias_path FROM aliases WHERE media_id IN ("
+        );
+        let mut separated = builder.separated(", ");
+        for m_id in &media_ids {
+            separated.push_bind(*m_id);
+        }
+        separated.push_unseparated(")");
+        let rows: Vec<(String, String)> = builder.build_query_as().fetch_all(pool).await.unwrap_or_default();
+        for (m_id, alias_path) in rows {
+            alias_map.entry(m_id).or_default().push(alias_path);
+        }
+    }
+
+    // 4. Construct responses in memory
+    let mut responses = Vec::with_capacity(media_list.len());
+    for m in media_list {
+        let url = if m.visibility == "private" {
+            format!("{}/private/{}", config.public_base_url, m.public_id)
+        } else {
+            format!("{}/f/{}/{}", config.public_base_url, m.public_id, m.filename)
+        };
+
+        let thumbnail_url = if m.media_type == "video" {
+            Some(format!("{}/thumbnails/{}.jpg", config.public_base_url, m.public_id))
+        } else {
+            Some(format!("{}/f/{}/{}", config.public_base_url, m.public_id, m.filename))
+        };
+
+        let folder_name = m.folder_id.as_ref().and_then(|f_id| folder_map.get(f_id).cloned());
+        let tags = tag_map.remove(&m.id).unwrap_or_default();
+        let aliases = alias_map.remove(&m.id).unwrap_or_default();
+
+        responses.push(MediaResponse {
+            id: m.id.clone(),
+            public_id: m.public_id.clone(),
+            filename: m.filename.clone(),
+            original_filename: m.original_filename.clone(),
+            extension: m.extension.clone(),
+            mime_type: m.mime_type.clone(),
+            media_type: m.media_type.clone(),
+            file_size: m.file_size,
+            width: m.width,
+            height: m.height,
+            duration: m.duration,
+            video_codec: m.video_codec.clone(),
+            audio_codec: m.audio_codec.clone(),
+            bitrate: m.bitrate,
+            frame_rate: m.frame_rate,
+            sha256: m.sha256.clone(),
+            visibility: m.visibility.clone(),
+            folder_id: m.folder_id.clone(),
+            folder_name,
+            url,
+            thumbnail_url,
+            tags,
+            aliases,
+            created_at: m.created_at.clone(),
+            updated_at: m.updated_at.clone(),
+            deleted_at: m.deleted_at.clone(),
+        });
+    }
+
+    Ok(responses)
+}
+
 pub async fn format_media_response(
     pool: &DbPool,
     m: &Media,
     config: &AppConfig,
 ) -> Result<MediaResponse, AppError> {
-    let url = if m.visibility == "private" {
-        format!("{}/private/{}", config.public_base_url, m.public_id)
-    } else {
-        format!("{}/f/{}/{}", config.public_base_url, m.public_id, m.filename)
-    };
-
-    let thumbnail_url = if m.media_type == "video" {
-        Some(format!("{}/thumbnails/{}.jpg", config.public_base_url, m.public_id))
-    } else {
-        Some(format!("{}/f/{}/{}", config.public_base_url, m.public_id, m.filename))
-    };
-
-    let tags: Vec<String> = sqlx::query_scalar(
-        "SELECT tags.name FROM tags JOIN media_tags ON tags.id = media_tags.tag_id WHERE media_tags.media_id = ?"
-    )
-    .bind(&m.id)
-    .fetch_all(pool)
-    .await
-    .unwrap_or_default();
-
-    let aliases: Vec<String> = sqlx::query_scalar(
-        "SELECT alias_path FROM aliases WHERE media_id = ?"
-    )
-    .bind(&m.id)
-    .fetch_all(pool)
-    .await
-    .unwrap_or_default();
-
-    let folder_name: Option<String> = if let Some(f_id) = &m.folder_id {
-        sqlx::query_scalar("SELECT name FROM folders WHERE id = ?")
-            .bind(f_id)
-            .fetch_optional(pool)
-            .await
-            .unwrap_or(None)
-    } else {
-        None
-    };
-
-    Ok(MediaResponse {
-        id: m.id.clone(),
-        public_id: m.public_id.clone(),
-        filename: m.filename.clone(),
-        original_filename: m.original_filename.clone(),
-        extension: m.extension.clone(),
-        mime_type: m.mime_type.clone(),
-        media_type: m.media_type.clone(),
-        file_size: m.file_size,
-        width: m.width,
-        height: m.height,
-        duration: m.duration,
-        video_codec: m.video_codec.clone(),
-        audio_codec: m.audio_codec.clone(),
-        bitrate: m.bitrate,
-        frame_rate: m.frame_rate,
-        sha256: m.sha256.clone(),
-        visibility: m.visibility.clone(),
-        folder_id: m.folder_id.clone(),
-        folder_name,
-        url,
-        thumbnail_url,
-        tags,
-        aliases,
-        created_at: m.created_at.clone(),
-        updated_at: m.updated_at.clone(),
-        deleted_at: m.deleted_at.clone(),
-    })
+    let mut list = format_media_responses_batch(pool, std::slice::from_ref(m), config).await?;
+    list.pop().ok_or_else(|| AppError::Internal("Failed to format media response".into()))
 }

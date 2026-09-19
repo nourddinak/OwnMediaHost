@@ -1,10 +1,8 @@
 use axum::{extract::State, response::IntoResponse, routing::get, Json, Router};
 use serde::Serialize;
-use std::sync::Arc;
 
 use crate::{
     auth::RequireAuth,
-    config::AppConfig,
     database::DbPool,
     errors::AppError,
     models::ApiResponse,
@@ -13,7 +11,6 @@ use crate::{
 #[derive(Clone)]
 pub struct TagsState {
     pub pool: DbPool,
-    pub config: Arc<AppConfig>,
 }
 
 #[derive(Debug, Serialize)]
@@ -23,8 +20,8 @@ pub struct TagWithCount {
     pub count: i64,
 }
 
-pub fn router(pool: DbPool, config: Arc<AppConfig>) -> Router {
-    let state = TagsState { pool, config };
+pub fn router(pool: DbPool) -> Router {
+    let state = TagsState { pool };
     Router::new().route("/", get(list_tags)).with_state(state)
 }
 

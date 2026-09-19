@@ -10,22 +10,16 @@ pub struct AppConfig {
     pub public_base_url: String,
     pub max_image_size: u64,
     pub max_video_size: u64,
-    pub default_chunk_size: u64,
-    pub jwt_secret: String,
+    pub allowed_image_formats: Vec<String>,
+    pub allowed_video_formats: Vec<String>,
     pub cookie_secret: String,
     pub api_key_pepper: String,
-    pub transform_signing_key: String,
     pub private_url_signing_key: String,
     pub admin_email: String,
     pub admin_password: String,
     pub allowed_origins: Vec<String>,
-    pub max_transform_width: u32,
-    pub max_transform_height: u32,
-    pub max_transform_pixels: u64,
-    pub allowed_transform_formats: Vec<String>,
     pub ffmpeg_path: String,
     pub ffprobe_path: String,
-    pub imgproxy_url: Option<String>,
 }
 
 impl AppConfig {
@@ -60,22 +54,25 @@ impl AppConfig {
             .and_then(|s| s.parse().ok())
             .unwrap_or(5 * 1024 * 1024 * 1024); // 5GB
 
-        let default_chunk_size = std::env::var("DEFAULT_CHUNK_SIZE")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(10 * 1024 * 1024); // 10MB
+        let allowed_image_formats = std::env::var("ALLOWED_IMAGE_FORMATS")
+            .unwrap_or_else(|_| "jpeg,jpg,png,webp,gif,avif,svg,bmp,ico,tiff,heic".to_string())
+            .split(',')
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
 
-        let jwt_secret = std::env::var("JWT_SECRET")
-            .unwrap_or_else(|_| "default_insecure_jwt_secret_change_in_production_32b".to_string());
+        let allowed_video_formats = std::env::var("ALLOWED_VIDEO_FORMATS")
+            .unwrap_or_else(|_| "mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp".to_string())
+            .split(',')
+            .map(|s| s.trim().to_lowercase())
+            .filter(|s| !s.is_empty())
+            .collect();
 
         let cookie_secret = std::env::var("COOKIE_SECRET")
             .unwrap_or_else(|_| "default_insecure_cookie_secret_change_in_production".to_string());
 
         let api_key_pepper = std::env::var("API_KEY_PEPPER")
             .unwrap_or_else(|_| "default_api_key_pepper_secret_change_in_production".to_string());
-
-        let transform_signing_key = std::env::var("TRANSFORM_SIGNING_KEY")
-            .unwrap_or_else(|_| "default_transform_signing_key_secret_change_in_prod".to_string());
 
         let private_url_signing_key = std::env::var("PRIVATE_URL_SIGNING_KEY")
             .unwrap_or_else(|_| "default_private_url_signing_key_secret_change_prod".to_string());
@@ -95,34 +92,8 @@ impl AppConfig {
             .filter(|s| !s.is_empty())
             .collect();
 
-        let max_transform_width = std::env::var("MAX_TRANSFORM_WIDTH")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(4096);
-
-        let max_transform_height = std::env::var("MAX_TRANSFORM_HEIGHT")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(4096);
-
-        let max_transform_pixels = std::env::var("MAX_TRANSFORM_PIXELS")
-            .ok()
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(16_777_216); // 16 megapixels
-
-        let allowed_transform_formats = std::env::var("ALLOWED_TRANSFORM_FORMATS")
-            .unwrap_or_else(|_| "jpeg,png,webp,gif".to_string())
-            .split(',')
-            .map(|s| s.trim().to_lowercase())
-            .filter(|s| !s.is_empty())
-            .collect();
-
         let ffmpeg_path = std::env::var("FFMPEG_PATH").unwrap_or_else(|_| "ffmpeg".to_string());
         let ffprobe_path = std::env::var("FFPROBE_PATH").unwrap_or_else(|_| "ffprobe".to_string());
-
-        let imgproxy_url = std::env::var("IMGPROXY_URL")
-            .ok()
-            .filter(|s| !s.trim().is_empty());
 
         Self {
             app_env,
@@ -133,22 +104,16 @@ impl AppConfig {
             public_base_url,
             max_image_size,
             max_video_size,
-            default_chunk_size,
-            jwt_secret,
+            allowed_image_formats,
+            allowed_video_formats,
             cookie_secret,
             api_key_pepper,
-            transform_signing_key,
             private_url_signing_key,
             admin_email,
             admin_password,
             allowed_origins,
-            max_transform_width,
-            max_transform_height,
-            max_transform_pixels,
-            allowed_transform_formats,
             ffmpeg_path,
             ffprobe_path,
-            imgproxy_url,
         }
     }
 }

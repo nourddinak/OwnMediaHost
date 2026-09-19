@@ -25,7 +25,6 @@ export const ApiKeysPage: React.FC = () => {
     { id: 'folders:write', label: 'folders:write (Create/delete folders)' },
     { id: 'aliases:read', label: 'aliases:read (List aliases)' },
     { id: 'aliases:write', label: 'aliases:write (Create/delete aliases)' },
-    { id: 'transform:sign', label: 'transform:sign (Sign transform URLs)' },
     { id: 'admin', label: 'admin (Full unrestricted administrative access)' },
   ];
 

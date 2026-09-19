@@ -106,12 +106,10 @@ if [ ! -f /etc/ownmediahost/ownmediahost.env ]; then
         local_jwt=$(openssl rand -hex 16 2>/dev/null || date +%s%N)
         local_cookie=$(openssl rand -hex 16 2>/dev/null || date +%s%N)
         local_pepper=$(openssl rand -hex 16 2>/dev/null || date +%s%N)
-        local_trans=$(openssl rand -hex 16 2>/dev/null || date +%s%N)
         local_priv=$(openssl rand -hex 16 2>/dev/null || date +%s%N)
         as_root sed -i "s|^JWT_SECRET=.*|JWT_SECRET=${local_jwt}|" /etc/ownmediahost/ownmediahost.env
         as_root sed -i "s|^COOKIE_SECRET=.*|COOKIE_SECRET=${local_cookie}|" /etc/ownmediahost/ownmediahost.env
         as_root sed -i "s|^API_KEY_PEPPER=.*|API_KEY_PEPPER=${local_pepper}|" /etc/ownmediahost/ownmediahost.env
-        as_root sed -i "s|^TRANSFORM_SIGNING_KEY=.*|TRANSFORM_SIGNING_KEY=${local_trans}|" /etc/ownmediahost/ownmediahost.env
         as_root sed -i "s|^PRIVATE_URL_SIGNING_KEY=.*|PRIVATE_URL_SIGNING_KEY=${local_priv}|" /etc/ownmediahost/ownmediahost.env
     fi
     as_root chown -R ownmediahost:ownmediahost /etc/ownmediahost 2>/dev/null || true

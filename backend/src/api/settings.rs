@@ -20,6 +20,7 @@ use crate::{
 #[derive(Clone)]
 pub struct SettingsState {
     pub pool: DbPool,
+    #[allow(dead_code)]
     pub config: Arc<AppConfig>,
 }
 
@@ -72,4 +73,13 @@ async fn update_settings(
 
     info!("Settings updated successfully.");
     Ok(Json(ApiResponse::ok("Settings updated successfully")))
+}
+
+pub async fn get_setting_or_default(pool: &DbPool, key: &str, default: &str) -> String {
+    sqlx::query_scalar("SELECT value FROM settings WHERE key = ?")
+        .bind(key)
+        .fetch_optional(pool)
+        .await
+        .unwrap_or(None)
+        .unwrap_or_else(|| default.to_string())
 }

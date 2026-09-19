@@ -3,6 +3,7 @@ import { api, MediaItem, FolderItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
 import { MediaCard } from '../components/media/MediaCard';
 import { MediaDetailDrawer } from '../components/media/MediaDetailDrawer';
+import { formatBytes } from '../utils/formatters';
 
 interface MediaPageProps {
   mediaTypeFilter?: 'image' | 'video';
@@ -10,6 +11,7 @@ interface MediaPageProps {
   folders: FolderItem[];
   refreshTrigger: number;
   onDataChanged: () => void;
+  folderId?: string;
 }
 
 export const MediaPage: React.FC<MediaPageProps> = ({
@@ -18,17 +20,24 @@ export const MediaPage: React.FC<MediaPageProps> = ({
   folders,
   refreshTrigger,
   onDataChanged,
+  folderId,
 }) => {
   const { toast } = useToast();
 
   const [mediaList, setMediaList] = useState<MediaItem[]>([]);
   const [total, setTotal] = useState<number>(0);
   const [loading, setLoading] = useState<boolean>(true);
-  const [selectedFolder, setSelectedFolder] = useState<string>('');
+  const [selectedFolder, setSelectedFolder] = useState<string>(folderId || '');
   const [sortBy, setSortBy] = useState<string>('newest');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeMedia, setActiveMedia] = useState<MediaItem | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+
+  useEffect(() => {
+    if (folderId !== undefined) {
+      setSelectedFolder(folderId);
+    }
+  }, [folderId]);
 
   const fetchMedia = useCallback(async () => {
     setLoading(true);
@@ -375,7 +384,7 @@ export const MediaPage: React.FC<MediaPageProps> = ({
                       {item.extension.toUpperCase()}
                     </td>
                     <td style={{ padding: '10px 16px', color: 'var(--text-tertiary)' }}>
-                      {(item.file_size / 1024 / 1024).toFixed(1)} MB
+                      {formatBytes(item.file_size)}
                     </td>
                     <td style={{ padding: '10px 16px' }}>
                       <span className={`badge ${item.visibility === 'public' ? 'badge-public' : 'badge-private'}`}>

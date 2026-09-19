@@ -1,6 +1,6 @@
 use fast_image_resize::images::Image;
 use fast_image_resize::{FilterType, PixelType, ResizeAlg, Resizer};
-use image::{DynamicImage, GenericImageView, ImageFormat};
+use image::{DynamicImage, GenericImageView};
 use serde::{Deserialize, Serialize};
 use std::io::Cursor;
 use std::path::Path;
@@ -28,33 +28,44 @@ pub struct VideoMetadata {
     pub frame_rate: Option<f64>,
 }
 
-#[derive(Debug, Clone, Default)]
-pub struct TransformParams {
-    pub width: Option<u32>,
-    pub height: Option<u32>,
-    pub fit: Option<String>,      // "cover", "contain", "fill", "inside"
-    pub format: Option<String>,   // "webp", "jpeg", "png", "gif", "original"
-    pub quality: Option<u8>,      // 1 - 100
-    pub blur: Option<f32>,        // radius (e.g. 0.5 - 20.0)
-    pub rotation: Option<u32>,    // 90, 180, 270
-}
-
 pub struct MediaProcessor;
 
 impl MediaProcessor {
     /// Detect genuine MIME type and media type from file byte signature
     pub fn detect_type(data: &[u8], filename: &str) -> (String, String, String) {
-        let detected = infer::get(data);
         let ext_from_name = Path::new(filename)
             .extension()
             .and_then(|e| e.to_str())
             .unwrap_or("")
             .to_lowercase();
 
+        // Handle SVG (XML text based)
+        if ext_from_name == "svg"
+            || data.starts_with(b"<svg")
+            || (data.starts_with(b"<?xml")
+                && std::str::from_utf8(&data[..data.len().min(1024)])
+                    .map(|s| s.contains("<svg"))
+                    .unwrap_or(false))
+        {
+            return ("image/svg+xml".to_string(), "svg".to_string(), "image".to_string());
+        }
+
+        let detected = infer::get(data);
         if let Some(kind) = detected {
             let mime = kind.mime_type().to_string();
-            let ext = kind.extension().to_string();
-            let media_type = if mime.starts_with("video/") {
+            let mut ext = kind.extension().to_string();
+
+            // Normalize extensions if user provided standard variant
+            if !ext_from_name.is_empty() {
+                match ext_from_name.as_str() {
+                    "jpg" if ext == "jpeg" => ext = "jpg".to_string(),
+                    "jpeg" if ext == "jpg" => ext = "jpeg".to_string(),
+                    "mkv" if mime == "video/x-matroska" => ext = "mkv".to_string(),
+                    _ => {}
+                }
+            }
+
+            let media_type = if mime.starts_with("video/") || mime == "application/ogg" {
                 "video".to_string()
             } else if mime.starts_with("image/") {
                 "image".to_string()
@@ -63,17 +74,31 @@ impl MediaProcessor {
             };
             (mime, ext, media_type)
         } else {
-            // Fallback for types not recognized by infer (e.g. certain webm/mkv containers)
+            // Fallback for types not recognized by infer (e.g. certain webm/mkv containers, uncompressed bmp, etc.)
             let (mime, media_type) = match ext_from_name.as_str() {
-                "jpg" | "jpeg" => ("image/jpeg".to_string(), "image".to_string()),
+                // Images
+                "jpg" | "jpeg" | "jfif" => ("image/jpeg".to_string(), "image".to_string()),
                 "png" => ("image/png".to_string(), "image".to_string()),
                 "webp" => ("image/webp".to_string(), "image".to_string()),
                 "gif" => ("image/gif".to_string(), "image".to_string()),
                 "avif" => ("image/avif".to_string(), "image".to_string()),
+                "bmp" => ("image/bmp".to_string(), "image".to_string()),
+                "ico" => ("image/x-icon".to_string(), "image".to_string()),
+                "tiff" | "tif" => ("image/tiff".to_string(), "image".to_string()),
+                "heic" => ("image/heic".to_string(), "image".to_string()),
+                "heif" => ("image/heif".to_string(), "image".to_string()),
+                // Videos
                 "mp4" => ("video/mp4".to_string(), "video".to_string()),
                 "webm" => ("video/webm".to_string(), "video".to_string()),
                 "mov" => ("video/quicktime".to_string(), "video".to_string()),
                 "mkv" => ("video/x-matroska".to_string(), "video".to_string()),
+                "avi" => ("video/x-msvideo".to_string(), "video".to_string()),
+                "wmv" => ("video/x-ms-wmv".to_string(), "video".to_string()),
+                "flv" => ("video/x-flv".to_string(), "video".to_string()),
+                "m4v" => ("video/x-m4v".to_string(), "video".to_string()),
+                "ts" => ("video/mp2t".to_string(), "video".to_string()),
+                "3gp" => ("video/3gpp".to_string(), "video".to_string()),
+                "ogv" => ("video/ogg".to_string(), "video".to_string()),
                 _ => ("application/octet-stream".to_string(), "other".to_string()),
             };
             let ext = if ext_from_name.is_empty() { "bin".to_string() } else { ext_from_name };
@@ -98,135 +123,58 @@ impl MediaProcessor {
         })
     }
 
-    /// High-performance image transformation using SIMD resizing
-    pub fn transform_image(
+    /// High-performance cover JPEG thumbnail generation using SIMD fast image resize
+    pub fn generate_thumbnail_jpeg(
         original_data: &[u8],
-        params: &TransformParams,
-    ) -> Result<(Vec<u8>, String), AppError> {
-        let mut img = image::load_from_memory(original_data)
+        target_size: u32,
+    ) -> Result<Vec<u8>, AppError> {
+        let img = image::load_from_memory(original_data)
             .map_err(|e| AppError::BadRequest(format!("Failed to decode image: {}", e)))?;
 
-        // 1. Rotation if specified
-        if let Some(deg) = params.rotation {
-            img = match deg {
-                90 => img.rotate90(),
-                180 => img.rotate180(),
-                270 => img.rotate270(),
-                _ => img,
-            };
-        }
-
-        // 2. Blur if specified
-        if let Some(radius) = params.blur {
-            if radius > 0.1 {
-                img = img.blur(radius);
-            }
-        }
-
-        // 3. Resize if width or height requested
         let (src_w, src_h) = img.dimensions();
-        let target_w = params.width.unwrap_or(src_w);
-        let target_h = params.height.unwrap_or(src_h);
-
-        if (target_w != src_w || target_h != src_h) && target_w > 0 && target_h > 0 {
-            let fit = params.fit.as_deref().unwrap_or("cover");
-
-            let (calc_w, calc_h) = match fit {
-                "contain" => {
-                    let ratio_w = target_w as f64 / src_w as f64;
-                    let ratio_h = target_h as f64 / src_h as f64;
-                    let ratio = ratio_w.min(ratio_h);
-                    (
-                        (src_w as f64 * ratio).round().max(1.0) as u32,
-                        (src_h as f64 * ratio).round().max(1.0) as u32,
-                    )
-                }
-                "inside" => {
-                    if src_w <= target_w && src_h <= target_h {
-                        (src_w, src_h)
-                    } else {
-                        let ratio_w = target_w as f64 / src_w as f64;
-                        let ratio_h = target_h as f64 / src_h as f64;
-                        let ratio = ratio_w.min(ratio_h);
-                        (
-                            (src_w as f64 * ratio).round().max(1.0) as u32,
-                            (src_h as f64 * ratio).round().max(1.0) as u32,
-                        )
-                    }
-                }
-                "fill" => (target_w, target_h),
-                _ => {
-                    // "cover" default
-                    let ratio_w = target_w as f64 / src_w as f64;
-                    let ratio_h = target_h as f64 / src_h as f64;
-                    let ratio = ratio_w.max(ratio_h);
-                    let scaled_w = (src_w as f64 * ratio).round().max(1.0) as u32;
-                    let scaled_h = (src_h as f64 * ratio).round().max(1.0) as u32;
-                    (scaled_w, scaled_h)
-                }
-            };
-
-            // Fast SIMD resize
-            let rgba = img.to_rgba8();
-            let src_image = Image::from_vec_u8(
-                src_w,
-                src_h,
-                rgba.into_raw(),
-                PixelType::U8x4,
-            ).map_err(|e| AppError::Internal(format!("Fast resize image alloc error: {}", e)))?;
-
-            let mut dst_image = Image::new(calc_w, calc_h, PixelType::U8x4);
-            let mut resizer = Resizer::new();
-            resizer
-                .resize(
-                    &src_image,
-                    &mut dst_image,
-                    &fast_image_resize::ResizeOptions::new().resize_alg(ResizeAlg::Convolution(
-                        FilterType::Lanczos3,
-                    )),
-                )
-                .map_err(|e| AppError::Internal(format!("Resize execution error: {}", e)))?;
-
-            let resized_rgba = image::RgbaImage::from_raw(calc_w, calc_h, dst_image.into_vec())
-                .ok_or_else(|| AppError::Internal("Failed to reconstruct resized image".into()))?;
-
-            let mut resized_dynamic = DynamicImage::ImageRgba8(resized_rgba);
-
-            // If fit == "cover", crop to target_w x target_h centered
-            if fit == "cover" && (calc_w > target_w || calc_h > target_h) {
-                let crop_x = if calc_w > target_w { (calc_w - target_w) / 2 } else { 0 };
-                let crop_y = if calc_h > target_h { (calc_h - target_h) / 2 } else { 0 };
-                resized_dynamic = resized_dynamic.crop_imm(crop_x, crop_y, target_w, target_h);
-            }
-
-            img = resized_dynamic;
+        if src_w == 0 || src_h == 0 {
+            return Err(AppError::BadRequest("Image has zero dimensions".into()));
         }
 
-        // 4. Encode to target format
-        let target_fmt = params.format.as_deref().unwrap_or("original");
-        let (output_format, mime_type) = match target_fmt {
-            "webp" => (ImageFormat::WebP, "image/webp"),
-            "jpeg" | "jpg" => (ImageFormat::Jpeg, "image/jpeg"),
-            "png" => (ImageFormat::Png, "image/png"),
-            "gif" => (ImageFormat::Gif, "image/gif"),
-            _ => (ImageFormat::WebP, "image/webp"), // Default high-efficiency format
-        };
+        let ratio_w = target_size as f64 / src_w as f64;
+        let ratio_h = target_size as f64 / src_h as f64;
+        let ratio = ratio_w.max(ratio_h);
+        let calc_w = (src_w as f64 * ratio).round().max(1.0) as u32;
+        let calc_h = (src_h as f64 * ratio).round().max(1.0) as u32;
+
+        let rgba = img.to_rgba8();
+        let src_image = Image::from_vec_u8(src_w, src_h, rgba.into_raw(), PixelType::U8x4)
+            .map_err(|e| AppError::Internal(format!("Thumbnail image alloc error: {}", e)))?;
+
+        let mut dst_image = Image::new(calc_w, calc_h, PixelType::U8x4);
+        let mut resizer = Resizer::new();
+        resizer
+            .resize(
+                &src_image,
+                &mut dst_image,
+                &fast_image_resize::ResizeOptions::new()
+                    .resize_alg(ResizeAlg::Convolution(FilterType::Lanczos3)),
+            )
+            .map_err(|e| AppError::Internal(format!("Thumbnail resize error: {}", e)))?;
+
+        let resized_rgba = image::RgbaImage::from_raw(calc_w, calc_h, dst_image.into_vec())
+            .ok_or_else(|| AppError::Internal("Failed to reconstruct thumbnail image".into()))?;
+
+        let mut resized_dynamic = DynamicImage::ImageRgba8(resized_rgba);
+        if calc_w > target_size || calc_h > target_size {
+            let crop_x = if calc_w > target_size { (calc_w - target_size) / 2 } else { 0 };
+            let crop_y = if calc_h > target_size { (calc_h - target_size) / 2 } else { 0 };
+            resized_dynamic = resized_dynamic.crop_imm(crop_x, crop_y, target_size, target_size);
+        }
 
         let mut output_bytes = Vec::new();
         let mut cursor = Cursor::new(&mut output_bytes);
+        let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut cursor, 85);
+        encoder
+            .encode_image(&resized_dynamic)
+            .map_err(|e| AppError::Internal(format!("Thumbnail JPEG encoding error: {}", e)))?;
 
-        if output_format == ImageFormat::Jpeg {
-            let quality = params.quality.unwrap_or(85).clamp(1, 100);
-            let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut cursor, quality);
-            encoder
-                .encode_image(&img)
-                .map_err(|e| AppError::Internal(format!("JPEG encoding error: {}", e)))?;
-        } else {
-            img.write_to(&mut cursor, output_format)
-                .map_err(|e| AppError::Internal(format!("Image encoding error: {}", e)))?;
-        }
-
-        Ok((output_bytes, mime_type.to_string()))
+        Ok(output_bytes)
     }
 
     /// Extract video metadata using ffprobe directly without shell execution

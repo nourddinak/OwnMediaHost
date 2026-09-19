@@ -18,6 +18,7 @@ use crate::{
 #[derive(Clone)]
 pub struct ActivityState {
     pub pool: DbPool,
+    #[allow(dead_code)]
     pub config: Arc<AppConfig>,
 }
 

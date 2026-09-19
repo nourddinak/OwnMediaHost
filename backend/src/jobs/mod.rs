@@ -8,7 +8,7 @@ use crate::{
     database::DbPool,
     errors::AppError,
     media::MediaProcessor,
-    models::Job,
+    models::{Job, Media},
     storage::{LocalStorageProvider, StorageProvider},
 };
 
@@ -20,11 +20,15 @@ pub struct VideoJobPayload {
 }
 
 pub fn spawn_job_worker(pool: DbPool, storage: LocalStorageProvider, config: Arc<AppConfig>) {
+    // 1. Worker loop for asynchronous jobs
+    let pool_worker = pool.clone();
+    let storage_worker = storage.clone();
+    let config_worker = config.clone();
     tokio::spawn(async move {
         info!("Background job worker started.");
         loop {
             // Check for next queued job
-            match fetch_and_process_next_job(&pool, &storage, &config).await {
+            match fetch_and_process_next_job(&pool_worker, &storage_worker, &config_worker).await {
                 Ok(true) => {
                     // Processed a job, check immediately for next
                     continue;
@@ -38,6 +42,21 @@ pub fn spawn_job_worker(pool: DbPool, storage: LocalStorageProvider, config: Arc
                     tokio::time::sleep(Duration::from_secs(5)).await;
                 }
             }
+        }
+    });
+
+    // 2. Periodic background maintenance task (hourly)
+    let pool_cleanup = pool;
+    tokio::spawn(async move {
+        // Initial delay before first sweep
+        tokio::time::sleep(Duration::from_secs(10)).await;
+        let empty_payload = serde_json::json!({});
+        let _ = enqueue_job(&pool_cleanup, "cleanup_expired", &empty_payload).await;
+
+        let mut interval = tokio::time::interval(Duration::from_secs(3600));
+        loop {
+            interval.tick().await;
+            let _ = enqueue_job(&pool_cleanup, "cleanup_expired", &empty_payload).await;
         }
     });
 }
@@ -198,26 +217,32 @@ async fn process_video_job(
 }
 
 async fn process_cleanup_job(pool: &DbPool, storage: &LocalStorageProvider) -> Result<(), AppError> {
-    let now = chrono::Utc::now().to_rfc3339();
+    let now = chrono::Utc::now();
 
-    // 1. Clean expired upload sessions
-    let expired_sessions: Vec<(String,)> = sqlx::query_as(
-        "SELECT id FROM upload_sessions WHERE expires_at < ?"
+    // 1. Clean trash based on trash_retention_days setting
+    let retention_days_str = crate::api::settings::get_setting_or_default(pool, "trash_retention_days", "30").await;
+    let retention_days: i64 = retention_days_str.trim().parse().unwrap_or(30).clamp(1, 365);
+    let trash_cutoff = (now - chrono::Duration::days(retention_days)).to_rfc3339();
+
+    let expired_media: Vec<Media> = sqlx::query_as(
+        "SELECT * FROM media WHERE deleted_at IS NOT NULL AND deleted_at < ?"
     )
-    .bind(&now)
+    .bind(&trash_cutoff)
     .fetch_all(pool)
-    .await?;
+    .await
+    .unwrap_or_default();
 
-    for (session_id,) in expired_sessions {
-        let chunk_dir = format!("temporary/chunks/{}", session_id);
-        if let Ok(path) = storage.get_full_path(&chunk_dir) {
-            let _ = tokio::fs::remove_dir_all(path).await;
-        }
-        let _ = sqlx::query("DELETE FROM upload_sessions WHERE id = ?")
-            .bind(&session_id)
-            .execute(pool)
-            .await;
+    for m in expired_media {
+        info!("Auto-purging expired trash media {} (deleted at {:?})", m.id, m.deleted_at);
+        let _ = crate::api::files::purge_media_artifacts_internal(pool, storage, &m, true).await;
     }
+
+    // 3. Prune api_logs older than 7 days
+    let log_cutoff = (now - chrono::Duration::days(7)).to_rfc3339();
+    let _ = sqlx::query("DELETE FROM api_logs WHERE created_at < ?")
+        .bind(&log_cutoff)
+        .execute(pool)
+        .await;
 
     Ok(())
 }

@@ -1,5 +1,6 @@
 import React from 'react';
 import { MediaItem } from '../../api/client';
+import { formatBytes, formatDuration } from '../../utils/formatters';
 
 interface MediaCardProps {
   media: MediaItem;
@@ -14,12 +15,6 @@ export const MediaCard: React.FC<MediaCardProps> = ({
   onSelect,
   onClick,
 }) => {
-  const formatSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
   return (
     <div
       className={`media-card ${isSelected ? 'selected' : ''}`}
@@ -39,22 +34,27 @@ export const MediaCard: React.FC<MediaCardProps> = ({
               overflow: 'hidden',
             }}
           >
-            {/* Native HTML5 video element with #t=1.0 fragment renders
-                the real frame at 1 second — no FFmpeg, no server processing.
-                Bypasses any previously-uploaded black thumbnails entirely. */}
-            <video
-              src={`${media.url}#t=1.0`}
-              poster={media.thumbnail_url || undefined}
-              preload="metadata"
-              muted
-              playsInline
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'cover',
-                pointerEvents: 'none',
-              }}
-            />
+            {media.thumbnail_url ? (
+              <img
+                src={media.thumbnail_url}
+                alt={media.filename}
+                className="media-thumbnail-img"
+                loading="lazy"
+              />
+            ) : (
+              <video
+                src={`${media.url}#t=1.0`}
+                preload="metadata"
+                muted
+                playsInline
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
             {/* Play Badge */}
             <div
               style={{
@@ -68,6 +68,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
                 alignItems: 'center',
                 justifyContent: 'center',
                 color: '#ffffff',
+                pointerEvents: 'none',
               }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
@@ -87,8 +88,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
                   color: '#fff',
                 }}
               >
-                {Math.floor(media.duration / 60)}:
-                {Math.floor(media.duration % 60).toString().padStart(2, '0')}
+                {formatDuration(media.duration)}
               </span>
             )}
           </div>
@@ -180,7 +180,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
             marginTop: '4px',
           }}
         >
-          <span>{formatSize(media.file_size)}</span>
+          <span>{formatBytes(media.file_size)}</span>
           <span>{media.extension.toUpperCase()}</span>
         </div>
       </div>

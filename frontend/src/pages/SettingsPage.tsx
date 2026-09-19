@@ -144,6 +144,58 @@ export const SettingsPage: React.FC = () => {
           />
         </div>
 
+        {/* Allowed Image Formats */}
+        <div>
+          <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', display: 'block' }}>
+            Allowed Image Formats
+          </label>
+          <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+            Comma-separated list of permitted image extensions (e.g. jpeg,jpg,png,webp,gif,avif,svg,bmp,ico,tiff,heic).
+          </span>
+          <input
+            type="text"
+            value={settings['allowed_image_formats'] || 'jpeg,jpg,png,webp,gif,avif,svg,bmp,ico,tiff,heic'}
+            onChange={(e) => handleChange('allowed_image_formats', e.target.value)}
+            placeholder="jpeg,jpg,png,webp,gif,avif,svg,bmp,ico,tiff,heic"
+            style={{
+              width: '100%',
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '6px',
+              padding: '8px 12px',
+              color: '#fff',
+              fontSize: '13px',
+              marginTop: '6px',
+            }}
+          />
+        </div>
+
+        {/* Allowed Video Formats */}
+        <div>
+          <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', display: 'block' }}>
+            Allowed Video Formats
+          </label>
+          <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+            Comma-separated list of permitted video extensions (e.g. mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp).
+          </span>
+          <input
+            type="text"
+            value={settings['allowed_video_formats'] || 'mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp'}
+            onChange={(e) => handleChange('allowed_video_formats', e.target.value)}
+            placeholder="mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp"
+            style={{
+              width: '100%',
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '6px',
+              padding: '8px 12px',
+              color: '#fff',
+              fontSize: '13px',
+              marginTop: '6px',
+            }}
+          />
+        </div>
+
         <button
           onClick={handleSave}
           disabled={saving}

@@ -45,7 +45,7 @@ pub struct Folder {
     pub updated_at: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
 pub struct FolderWithCount {
     pub id: String,
     pub name: String,
@@ -131,23 +131,6 @@ pub struct AliasResponse {
     pub url: String,
     pub created_at: String,
     pub updated_at: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]
-pub struct UploadSession {
-    pub id: String,
-    pub original_filename: String,
-    pub mime_type: String,
-    pub total_size: i64,
-    pub uploaded_size: i64,
-    pub chunk_size: i64,
-    pub total_chunks: i64,
-    pub uploaded_chunks: String, // JSON array of numbers
-    pub folder_id: Option<String>,
-    pub visibility: String,
-    pub alias: Option<String>,
-    pub expires_at: String,
-    pub created_at: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::FromRow)]

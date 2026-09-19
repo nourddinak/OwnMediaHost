@@ -778,8 +778,6 @@ setup_storage_and_user() {
     as_root mkdir -p "${STORAGE_DIR}/originals/images" \
                      "${STORAGE_DIR}/originals/videos" \
                      "${STORAGE_DIR}/generated/thumbnails" \
-                     "${STORAGE_DIR}/generated/transformed" \
-                     "${STORAGE_DIR}/temporary/chunks" \
                      "${STORAGE_DIR}/database" \
                      "/etc/ownmediahost"
 
@@ -798,13 +796,11 @@ generate_env_file() {
     local jwt_sec
     local cookie_sec
     local pepper_sec
-    local transform_sec
     local private_sec
 
     jwt_sec=$(generate_secret)
     cookie_sec=$(generate_secret)
     pepper_sec=$(generate_secret)
-    transform_sec=$(generate_secret)
     private_sec=$(generate_secret)
 
     local public_url
@@ -831,7 +827,6 @@ ALLOWED_ORIGINS=${allowed_origins}
 JWT_SECRET=${jwt_sec}
 COOKIE_SECRET=${cookie_sec}
 API_KEY_PEPPER=${pepper_sec}
-TRANSFORM_SIGNING_KEY=${transform_sec}
 PRIVATE_URL_SIGNING_KEY=${private_sec}
 
 # Initial Administrator
@@ -841,11 +836,8 @@ ADMIN_PASSWORD=${ADMIN_PASSWORD}
 # Limits & Storage
 MAX_IMAGE_SIZE=52428800
 MAX_VIDEO_SIZE=5368709120
-DEFAULT_CHUNK_SIZE=10485760
-MAX_TRANSFORM_WIDTH=4096
-MAX_TRANSFORM_HEIGHT=4096
-MAX_TRANSFORM_PIXELS=16777216
-ALLOWED_TRANSFORM_FORMATS=jpeg,png,webp,gif
+ALLOWED_IMAGE_FORMATS=jpeg,jpg,png,webp,gif,avif,svg,bmp,ico,tiff,heic
+ALLOWED_VIDEO_FORMATS=mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp
 EOF
 
     as_root chown ownmediahost:ownmediahost "${env_file}"

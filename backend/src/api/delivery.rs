@@ -10,6 +10,7 @@ use serde::Deserialize;
 use std::sync::Arc;
 use tokio::fs::File;
 use tokio::io::{AsyncReadExt, AsyncSeekExt, SeekFrom};
+use tokio_util::io::ReaderStream;
 
 use crate::{
     config::AppConfig,
@@ -177,8 +178,8 @@ pub async fn serve_file_with_range(
                         let length = end - start + 1;
                         file.seek(SeekFrom::Start(start)).await?;
 
-                        let mut buffer = vec![0u8; length as usize];
-                        file.read_exact(&mut buffer).await?;
+                        let stream = ReaderStream::new(file.take(length));
+                        let body = Body::from_stream(stream);
 
                         let resp = Response::builder()
                             .status(StatusCode::PARTIAL_CONTENT)
@@ -189,7 +190,7 @@ pub async fn serve_file_with_range(
                                 format!("bytes {}-{}/{}", start, end, file_size),
                             )
                             .header(header::CONTENT_LENGTH, length.to_string())
-                            .body(Body::from(buffer))
+                            .body(body)
                             .unwrap();
 
                         return Ok(resp);
@@ -199,9 +200,9 @@ pub async fn serve_file_with_range(
         }
     }
 
-    // Standard 200 OK delivery
-    let mut buffer = Vec::with_capacity(file_size as usize);
-    file.read_to_end(&mut buffer).await?;
+    // Standard 200 OK delivery (zero whole-file memory buffering)
+    let stream = ReaderStream::new(file);
+    let body = Body::from_stream(stream);
 
     let cache_control = if is_immutable {
         "public, max-age=31536000, immutable"
@@ -215,7 +216,7 @@ pub async fn serve_file_with_range(
         .header(header::ACCEPT_RANGES, "bytes")
         .header(header::CONTENT_LENGTH, file_size.to_string())
         .header(header::CACHE_CONTROL, cache_control)
-        .body(Body::from(buffer))
+        .body(body)
         .unwrap();
 
     Ok(resp)

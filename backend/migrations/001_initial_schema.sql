@@ -83,22 +83,6 @@ CREATE TABLE IF NOT EXISTS aliases (
     updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
--- Resumable Upload Sessions
-CREATE TABLE IF NOT EXISTS upload_sessions (
-    id TEXT PRIMARY KEY NOT NULL,
-    original_filename TEXT NOT NULL,
-    mime_type TEXT NOT NULL,
-    total_size INTEGER NOT NULL,
-    uploaded_size INTEGER NOT NULL DEFAULT 0,
-    chunk_size INTEGER NOT NULL,
-    total_chunks INTEGER NOT NULL,
-    uploaded_chunks TEXT NOT NULL DEFAULT '[]', -- JSON array of chunk indexes: [0, 1, 2]
-    folder_id TEXT REFERENCES folders(id) ON DELETE SET NULL,
-    visibility TEXT NOT NULL DEFAULT 'public',
-    alias TEXT,
-    expires_at TEXT NOT NULL,
-    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
-);
 
 -- Background Jobs
 CREATE TABLE IF NOT EXISTS jobs (

@@ -87,33 +87,51 @@ async fn list_aliases(
         return Err(AppError::Forbidden("Permission aliases:read required".into()));
     }
 
-    let aliases: Vec<Alias> = sqlx::query_as("SELECT * FROM aliases ORDER BY created_at DESC")
-        .fetch_all(&state.pool)
-        .await?;
-
-    let mut items = Vec::new();
-    for a in aliases {
-        let media_opt: Option<(String, String)> = sqlx::query_as(
-            "SELECT public_id, filename FROM media WHERE id = ?"
-        )
-        .bind(&a.media_id)
-        .fetch_optional(&state.pool)
-        .await?;
-
-        let (public_id, filename) = media_opt.unwrap_or_else(|| ("unknown".into(), "unknown".into()));
-        let url = format!("{}/a/{}", state.config.public_base_url, a.alias_path);
-
-        items.push(AliasResponse {
-            id: a.id,
-            alias_path: a.alias_path,
-            media_id: a.media_id,
-            media_public_id: public_id,
-            media_filename: filename,
-            url,
-            created_at: a.created_at,
-            updated_at: a.updated_at,
-        });
+    #[derive(sqlx::FromRow)]
+    struct AliasWithMediaRow {
+        id: String,
+        alias_path: String,
+        media_id: String,
+        media_public_id: Option<String>,
+        media_filename: Option<String>,
+        created_at: String,
+        updated_at: String,
     }
+
+    let rows: Vec<AliasWithMediaRow> = sqlx::query_as(
+        r#"
+        SELECT 
+            a.id,
+            a.alias_path,
+            a.media_id,
+            m.public_id as media_public_id,
+            m.filename as media_filename,
+            a.created_at,
+            a.updated_at
+        FROM aliases a
+        LEFT JOIN media m ON a.media_id = m.id
+        ORDER BY a.created_at DESC
+        "#
+    )
+    .fetch_all(&state.pool)
+    .await?;
+
+    let items: Vec<AliasResponse> = rows
+        .into_iter()
+        .map(|r| {
+            let url = format!("{}/a/{}", state.config.public_base_url, r.alias_path);
+            AliasResponse {
+                id: r.id,
+                alias_path: r.alias_path,
+                media_id: r.media_id,
+                media_public_id: r.media_public_id.unwrap_or_else(|| "unknown".into()),
+                media_filename: r.media_filename.unwrap_or_else(|| "unknown".into()),
+                url,
+                created_at: r.created_at,
+                updated_at: r.updated_at,
+            }
+        })
+        .collect();
 
     Ok(Json(ApiResponse::ok(items)))
 }
