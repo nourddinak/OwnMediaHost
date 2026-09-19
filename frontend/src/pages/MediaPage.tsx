@@ -397,7 +397,15 @@ export const MediaPage: React.FC<MediaPageProps> = ({
       <MediaDetailDrawer
         media={activeMedia}
         onClose={() => setActiveMedia(null)}
-        onUpdate={() => {
+        onUpdate={(updatedMedia) => {
+          // Instant local state sync if the mutation returned fresh data
+          if (updatedMedia) {
+            setActiveMedia(updatedMedia);
+            setMediaList((prev) =>
+              prev.map((item) => (item.id === updatedMedia.id ? updatedMedia : item))
+            );
+          }
+          // Also trigger background refetch for full consistency (folder counts, etc.)
           fetchMedia();
           onDataChanged();
         }}

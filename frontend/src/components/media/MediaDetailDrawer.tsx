@@ -6,7 +6,7 @@ import { copyTextToClipboard } from '../../utils/clipboard';
 interface MediaDetailDrawerProps {
   media: MediaItem | null;
   onClose: () => void;
-  onUpdate: () => void;
+  onUpdate: (updatedMedia?: MediaItem) => void;
   onDelete: (media: MediaItem) => void;
 }
 
@@ -67,9 +67,9 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
   const handleToggleVisibility = async () => {
     const newVis = media.visibility === 'public' ? 'private' : 'public';
     try {
-      await api.updateFile(media.id, { visibility: newVis });
+      const updated = await api.updateFile(media.id, { visibility: newVis });
       toast(`Visibility updated to ${newVis}`);
-      onUpdate();
+      onUpdate(updated);
     } catch (err: any) {
       toast(err.message, 'error');
     }
@@ -109,9 +109,9 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
 
     setReplacing(true);
     try {
-      await api.replaceFileContent(media.id, file);
+      const updated = await api.replaceFileContent(media.id, file);
       toast('File content replaced successfully!');
-      onUpdate();
+      onUpdate(updated);
     } catch (err: any) {
       toast(err.message || 'Failed to replace file', 'error');
     } finally {
@@ -128,10 +128,10 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
     }
     const updatedTags = [...media.tags, cleanTag];
     try {
-      await api.updateFile(media.id, { tags: updatedTags });
+      const updated = await api.updateFile(media.id, { tags: updatedTags });
       setNewTag('');
       toast(`Tag '${cleanTag}' added`);
-      onUpdate();
+      onUpdate(updated);
     } catch (err: any) {
       toast(err.message, 'error');
     }
@@ -140,9 +140,9 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
   const handleRemoveTag = async (tagToRemove: string) => {
     const updatedTags = media.tags.filter((t) => t !== tagToRemove);
     try {
-      await api.updateFile(media.id, { tags: updatedTags });
+      const updated = await api.updateFile(media.id, { tags: updatedTags });
       toast(`Tag '${tagToRemove}' removed`);
-      onUpdate();
+      onUpdate(updated);
     } catch (err: any) {
       toast(err.message, 'error');
     }
