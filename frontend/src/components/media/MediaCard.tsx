@@ -36,23 +36,25 @@ export const MediaCard: React.FC<MediaCardProps> = ({
               alignItems: 'center',
               justifyContent: 'center',
               background: '#0d0d0e',
+              overflow: 'hidden',
             }}
           >
-            {media.thumbnail_url ? (
-              <img
-                src={media.thumbnail_url}
-                alt={media.filename}
-                className="media-thumbnail-img"
-                loading="lazy"
-              />
-            ) : (
-              <div style={{ color: 'var(--text-tertiary)' }}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                  <polygon points="23 7 16 12 23 17 23 7"/>
-                  <rect width="14" height="14" x="1" y="5" rx="2" ry="2"/>
-                </svg>
-              </div>
-            )}
+            {/* Native HTML5 video element with #t=1.0 fragment renders
+                the real frame at 1 second — no FFmpeg, no server processing.
+                Bypasses any previously-uploaded black thumbnails entirely. */}
+            <video
+              src={`${media.url}#t=1.0`}
+              poster={media.thumbnail_url || undefined}
+              preload="metadata"
+              muted
+              playsInline
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                pointerEvents: 'none',
+              }}
+            />
             {/* Play Badge */}
             <div
               style={{
