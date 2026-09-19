@@ -42,19 +42,22 @@ pub fn create_router(
         pool: pool.clone(),
     };
 
+    let settings_cache = settings::SettingsCache::new();
+
     let api_v1: Router = Router::new()
         .route("/", get(api_v1_root))
         .nest("/auth", auth::router(pool.clone(), config.clone()))
-        .nest("/files", files::router(pool.clone(), storage.clone(), config.clone()))
-        .nest("/folders", folders::router(pool.clone(), config.clone()))
+        .nest("/files", files::router(pool.clone(), storage.clone(), config.clone(), settings_cache.clone()))
+        .nest("/folders", folders::router(pool.clone()))
         .nest("/tags", tags::router(pool.clone()))
         .nest("/keys", keys::router(pool.clone(), config.clone()))
-        .nest("/storage", storage_stats::router(pool.clone(), storage.clone(), config.clone()))
-        .nest("/activity", activity::router(pool.clone(), config.clone()))
-        .nest("/settings", settings::router(pool.clone(), config.clone()));
+        .nest("/storage", storage_stats::router(pool.clone(), storage.clone()))
+        .nest("/activity", activity::router(pool.clone()))
+        .nest("/settings", settings::router(pool.clone(), settings_cache))
+        .nest("/aliases", aliases::crud_router(pool.clone(), storage.clone(), config.clone()));
 
     let delivery_routes = delivery::router(pool.clone(), storage.clone(), config.clone());
-    let alias_routes = aliases::router(pool.clone(), storage.clone(), config.clone());
+    let alias_routes = aliases::delivery_router(pool.clone(), storage.clone(), config.clone());
 
     Router::new()
         // Root status endpoints

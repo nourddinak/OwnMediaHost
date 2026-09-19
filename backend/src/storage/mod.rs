@@ -113,9 +113,13 @@ impl StorageProvider for LocalStorageProvider {
                 break;
             }
 
-            match std::fs::read_dir(dir) {
+            match fs::read_dir(dir).await {
                 Ok(mut entries) => {
-                    if entries.next().is_none() {
+                    let is_empty = match entries.next_entry().await {
+                        Ok(entry) => entry.is_none(),
+                        Err(_) => false,
+                    };
+                    if is_empty {
                         let _ = fs::remove_dir(dir).await;
                         current = dir.parent();
                     } else {

@@ -136,14 +136,6 @@ impl AuthIdentity {
             }
         }
     }
-
-    #[allow(dead_code)]
-    pub fn api_key_id(&self) -> Option<String> {
-        match self {
-            AuthIdentity::Admin(_) => None,
-            AuthIdentity::ApiKey { api_key, .. } => Some(api_key.id.clone()),
-        }
-    }
 }
 
 pub struct RequireAuth(pub AuthIdentity);

@@ -244,5 +244,12 @@ async fn process_cleanup_job(pool: &DbPool, storage: &LocalStorageProvider) -> R
         .execute(pool)
         .await;
 
+    // 4. Prune completed/failed jobs older than 24 hours
+    let job_cutoff = (now - chrono::Duration::hours(24)).to_rfc3339();
+    let _ = sqlx::query("DELETE FROM jobs WHERE status IN ('completed', 'failed') AND completed_at < ?")
+        .bind(&job_cutoff)
+        .execute(pool)
+        .await;
+
     Ok(())
 }

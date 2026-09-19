@@ -52,3 +52,21 @@ export async function copyTextToClipboard(text: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Copy text and show a toast notification (success or failure).
+ * Avoids duplicating the same copy-then-toast pattern across pages.
+ */
+export async function copyWithToast(
+  text: string,
+  toast: (message: string, type?: 'success' | 'error' | 'info') => void,
+  successMessage = 'Copied to clipboard!'
+): Promise<boolean> {
+  const ok = await copyTextToClipboard(text);
+  if (ok) {
+    toast(successMessage);
+  } else {
+    toast('Could not access clipboard. Please copy manually.', 'error');
+  }
+  return ok;
+}

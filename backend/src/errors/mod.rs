@@ -26,8 +26,6 @@ pub enum AppError {
     Conflict(String),
     PayloadTooLarge(String),
     Internal(String),
-    #[allow(dead_code)]
-    Validation(String),
 }
 
 impl std::fmt::Display for AppError {
@@ -40,7 +38,6 @@ impl std::fmt::Display for AppError {
             AppError::Conflict(msg) => write!(f, "Conflict: {}", msg),
             AppError::PayloadTooLarge(msg) => write!(f, "Payload Too Large: {}", msg),
             AppError::Internal(msg) => write!(f, "Internal Error: {}", msg),
-            AppError::Validation(msg) => write!(f, "Validation Error: {}", msg),
         }
     }
 }
@@ -56,7 +53,6 @@ impl IntoResponse for AppError {
             AppError::Forbidden(msg) => (StatusCode::FORBIDDEN, "FORBIDDEN", msg),
             AppError::Conflict(msg) => (StatusCode::CONFLICT, "CONFLICT", msg),
             AppError::PayloadTooLarge(msg) => (StatusCode::PAYLOAD_TOO_LARGE, "FILE_TOO_LARGE", msg),
-            AppError::Validation(msg) => (StatusCode::UNPROCESSABLE_ENTITY, "VALIDATION_ERROR", msg),
             AppError::Internal(msg) => {
                 tracing::error!("Internal error: {}", msg);
                 (

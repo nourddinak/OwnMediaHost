@@ -37,7 +37,20 @@ pub struct UpdateAliasRequest {
     pub media_id: String,
 }
 
-pub fn router(pool: DbPool, storage: LocalStorageProvider, config: Arc<AppConfig>) -> Router {
+pub fn crud_router(pool: DbPool, storage: LocalStorageProvider, config: Arc<AppConfig>) -> Router {
+    let state = AliasesState {
+        pool,
+        storage,
+        config,
+    };
+
+    Router::new()
+        .route("/", get(list_aliases).post(create_alias))
+        .route("/{id}", patch(update_alias).delete(delete_alias))
+        .with_state(state)
+}
+
+pub fn delivery_router(pool: DbPool, storage: LocalStorageProvider, config: Arc<AppConfig>) -> Router {
     let state = AliasesState {
         pool,
         storage,
@@ -46,8 +59,6 @@ pub fn router(pool: DbPool, storage: LocalStorageProvider, config: Arc<AppConfig
 
     Router::new()
         .route("/a/{*alias_path}", get(resolve_and_deliver_alias))
-        .route("/api/v1/aliases", get(list_aliases).post(create_alias))
-        .route("/api/v1/aliases/{id}", patch(update_alias).delete(delete_alias))
         .with_state(state)
 }
 

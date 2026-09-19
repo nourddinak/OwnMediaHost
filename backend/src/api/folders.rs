@@ -5,12 +5,9 @@ use axum::{
     Json, Router,
 };
 use serde::Deserialize;
-use std::sync::Arc;
 use tracing::info;
-
 use crate::{
     auth::RequireAuth,
-    config::AppConfig,
     database::DbPool,
     errors::AppError,
     models::{ApiResponse, Folder, FolderWithCount},
@@ -19,8 +16,6 @@ use crate::{
 #[derive(Clone)]
 pub struct FoldersState {
     pub pool: DbPool,
-    #[allow(dead_code)]
-    pub config: Arc<AppConfig>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -35,8 +30,8 @@ pub struct UpdateFolderRequest {
     pub parent_id: Option<String>,
 }
 
-pub fn router(pool: DbPool, config: Arc<AppConfig>) -> Router {
-    let state = FoldersState { pool, config };
+pub fn router(pool: DbPool) -> Router {
+    let state = FoldersState { pool };
 
     Router::new()
         .route("/", get(list_folders).post(create_folder))

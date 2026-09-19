@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api, ApiKeyItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
-import { copyTextToClipboard } from '../utils/clipboard';
+import { copyWithToast } from '../utils/clipboard';
 import { Pagination } from '../components/common/Pagination';
 
 export const ApiKeysPage: React.FC = () => {
@@ -87,12 +87,7 @@ export const ApiKeysPage: React.FC = () => {
   };
 
   const copySecret = async (secret: string) => {
-    const ok = await copyTextToClipboard(secret);
-    if (ok) {
-      toast('API key copied to clipboard!');
-    } else {
-      toast('Could not access clipboard. Please copy manually.', 'error');
-    }
+    await copyWithToast(secret, toast, 'API key copied to clipboard!');
   };
 
   const totalPages = Math.ceil(keys.length / pageSize) || 1;

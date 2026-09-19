@@ -19,6 +19,7 @@ use crate::{
     models::{ApiResponse, Media, MediaResponse, PaginatedResponse},
     security::sign_private_url,
     storage::{LocalStorageProvider, StorageProvider},
+    api::settings::SettingsCache,
 };
 
 #[derive(Clone)]
@@ -26,6 +27,7 @@ pub struct FilesState {
     pub pool: DbPool,
     pub storage: LocalStorageProvider,
     pub config: Arc<AppConfig>,
+    pub settings_cache: SettingsCache,
 }
 
 #[derive(Debug, Deserialize)]
@@ -65,15 +67,20 @@ pub struct SignPrivateRequest {
 
 #[derive(Debug, Deserialize, Default)]
 pub struct DeleteFileQuery {
-    pub permanent: Option<bool>,
     pub cleanup_empty_folder: Option<bool>,
 }
 
-pub fn router(pool: DbPool, storage: LocalStorageProvider, config: Arc<AppConfig>) -> Router {
+pub fn router(
+    pool: DbPool,
+    storage: LocalStorageProvider,
+    config: Arc<AppConfig>,
+    settings_cache: SettingsCache,
+) -> Router {
     let state = FilesState {
         pool,
         storage,
         config,
+        settings_cache,
     };
 
     Router::new()
@@ -149,13 +156,14 @@ pub async fn process_media_payload(
 }
 
 pub async fn validate_allowed_format(
+    settings_cache: &SettingsCache,
     pool: &DbPool,
     media_type: &str,
     extension: &str,
 ) -> Result<(), AppError> {
     let ext_lower = extension.to_lowercase();
 
-    let allowed_images_str = crate::api::settings::get_setting_or_default(
+    let allowed_images_str = settings_cache.get_or_default(
         pool,
         "allowed_image_formats",
         "jpeg,jpg,png,webp,gif,avif,svg,bmp,ico,tiff,heic",
@@ -166,7 +174,7 @@ pub async fn validate_allowed_format(
         .filter(|s| !s.is_empty())
         .collect();
 
-    let allowed_videos_str = crate::api::settings::get_setting_or_default(
+    let allowed_videos_str = settings_cache.get_or_default(
         pool,
         "allowed_video_formats",
         "mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp",
@@ -242,8 +250,8 @@ async fn upload_file(
     let mut client_duration: Option<f64> = None;
     let mut folder_id: Option<String> = None;
     let mut alias: Option<String> = None;
-    let mut visibility = crate::api::settings::get_setting_or_default(&state.pool, "default_visibility", "public").await;
-    let mut duplicate_mode = crate::api::settings::get_setting_or_default(&state.pool, "duplicate_handling", "allow").await;
+    let mut visibility = state.settings_cache.get_or_default(&state.pool, "default_visibility", "public").await;
+    let mut duplicate_mode = state.settings_cache.get_or_default(&state.pool, "duplicate_handling", "allow").await;
     let mut tags: Vec<String> = Vec::new();
 
     while let Some(field) = multipart
@@ -353,7 +361,7 @@ async fn upload_file(
     .await?;
 
     // Validate allowed formats
-    validate_allowed_format(&state.pool, &processed.media_type, &processed.extension).await?;
+    validate_allowed_format(&state.settings_cache, &state.pool, &processed.media_type, &processed.extension).await?;
 
     // Duplicate detection check
     if duplicate_mode == "reject" || duplicate_mode == "reuse" {
@@ -705,7 +713,7 @@ async fn replace_file_content(
     .await?;
 
     // Validate allowed formats
-    validate_allowed_format(&state.pool, &processed.media_type, &processed.extension).await?;
+    validate_allowed_format(&state.settings_cache, &state.pool, &processed.media_type, &processed.extension).await?;
 
     // Determine target storage path for the new format/extension
     let new_storage_path = LocalStorageProvider::generate_storage_path(
@@ -916,21 +924,6 @@ async fn soft_delete_file(
         return Err(AppError::Forbidden("Permission files:delete required".into()));
     }
 
-    if query.permanent.unwrap_or(false) {
-        let media: Option<Media> = sqlx::query_as("SELECT * FROM media WHERE id = ? OR public_id = ?")
-            .bind(&id)
-            .bind(&id)
-            .fetch_optional(&state.pool)
-            .await?;
-
-        let Some(media) = media else {
-            return Err(AppError::NotFound("Media not found".into()));
-        };
-
-        purge_media_artifacts(&state, &media, query.cleanup_empty_folder.unwrap_or(true)).await?;
-        info!("Media {} permanently purged with all related artifacts.", media.id);
-        return Ok(Json(ApiResponse::ok("Media and all related artifacts permanently deleted")));
-    }
 
     let now = chrono::Utc::now().to_rfc3339();
     let res = sqlx::query(
@@ -1038,28 +1031,44 @@ async fn bulk_operations(
             if !identity.has_permission("files:delete") {
                 return Err(AppError::Forbidden("Permission files:delete required".into()));
             }
+            let mut builder = sqlx::QueryBuilder::<sqlx::Sqlite>::new(
+                "UPDATE media SET deleted_at = "
+            );
+            builder.push_bind(&now);
+            builder.push(" WHERE id IN (");
+            let mut sep = builder.separated(", ");
             for id in &req.ids {
-                let _ = sqlx::query("UPDATE media SET deleted_at = ? WHERE id = ? OR public_id = ?")
-                    .bind(&now)
-                    .bind(id)
-                    .bind(id)
-                    .execute(&state.pool)
-                    .await;
+                sep.push_bind(id);
             }
+            sep.push_unseparated(") OR public_id IN (");
+            let mut sep2 = builder.separated(", ");
+            for id in &req.ids {
+                sep2.push_bind(id);
+            }
+            sep2.push_unseparated(")");
+            builder.build().execute(&state.pool).await?;
         }
         "restore" => {
             if !identity.has_permission("files:write") {
                 return Err(AppError::Forbidden("Permission files:write required".into()));
             }
+            let mut builder = sqlx::QueryBuilder::<sqlx::Sqlite>::new(
+                "UPDATE media SET deleted_at = NULL WHERE id IN ("
+            );
+            let mut sep = builder.separated(", ");
             for id in &req.ids {
-                let _ = sqlx::query("UPDATE media SET deleted_at = NULL WHERE id = ? OR public_id = ?")
-                    .bind(id)
-                    .bind(id)
-                    .execute(&state.pool)
-                    .await;
+                sep.push_bind(id);
             }
+            sep.push_unseparated(") OR public_id IN (");
+            let mut sep2 = builder.separated(", ");
+            for id in &req.ids {
+                sep2.push_bind(id);
+            }
+            sep2.push_unseparated(")");
+            builder.build().execute(&state.pool).await?;
         }
         "permanent_delete" => {
+            // Must iterate: each item requires filesystem cleanup
             if !identity.has_permission("files:delete") {
                 return Err(AppError::Forbidden("Permission files:delete required".into()));
             }
@@ -1079,30 +1088,48 @@ async fn bulk_operations(
                 return Err(AppError::Forbidden("Permission files:write required".into()));
             }
             let f_id = req.target_folder_id.filter(|f| f != "root" && !f.is_empty());
+            let mut builder = sqlx::QueryBuilder::<sqlx::Sqlite>::new(
+                "UPDATE media SET folder_id = "
+            );
+            builder.push_bind(&f_id);
+            builder.push(", updated_at = ");
+            builder.push_bind(&now);
+            builder.push(" WHERE id IN (");
+            let mut sep = builder.separated(", ");
             for id in &req.ids {
-                let _ = sqlx::query("UPDATE media SET folder_id = ?, updated_at = ? WHERE id = ? OR public_id = ?")
-                    .bind(&f_id)
-                    .bind(&now)
-                    .bind(id)
-                    .bind(id)
-                    .execute(&state.pool)
-                    .await;
+                sep.push_bind(id);
             }
+            sep.push_unseparated(") OR public_id IN (");
+            let mut sep2 = builder.separated(", ");
+            for id in &req.ids {
+                sep2.push_bind(id);
+            }
+            sep2.push_unseparated(")");
+            builder.build().execute(&state.pool).await?;
         }
         "visibility" => {
             if !identity.has_permission("files:write") {
                 return Err(AppError::Forbidden("Permission files:write required".into()));
             }
             if let Some(vis) = req.target_visibility {
+                let mut builder = sqlx::QueryBuilder::<sqlx::Sqlite>::new(
+                    "UPDATE media SET visibility = "
+                );
+                builder.push_bind(&vis);
+                builder.push(", updated_at = ");
+                builder.push_bind(&now);
+                builder.push(" WHERE id IN (");
+                let mut sep = builder.separated(", ");
                 for id in &req.ids {
-                    let _ = sqlx::query("UPDATE media SET visibility = ?, updated_at = ? WHERE id = ? OR public_id = ?")
-                        .bind(&vis)
-                        .bind(&now)
-                        .bind(id)
-                        .bind(id)
-                        .execute(&state.pool)
-                        .await;
+                    sep.push_bind(id);
                 }
+                sep.push_unseparated(") OR public_id IN (");
+                let mut sep2 = builder.separated(", ");
+                for id in &req.ids {
+                    sep2.push_bind(id);
+                }
+                sep2.push_unseparated(")");
+                builder.build().execute(&state.pool).await?;
             }
         }
         _ => return Err(AppError::BadRequest(format!("Unknown bulk action: {}", req.action))),

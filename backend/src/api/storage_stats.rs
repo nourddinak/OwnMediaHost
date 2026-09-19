@@ -1,12 +1,10 @@
 use axum::{extract::State, response::IntoResponse, routing::get, Json, Router};
 use serde::Serialize;
 use std::path::Path;
-use std::sync::Arc;
 use sysinfo::Disks;
 
 use crate::{
     auth::RequireAuth,
-    config::AppConfig,
     database::DbPool,
     errors::AppError,
     models::ApiResponse,
@@ -17,8 +15,6 @@ use crate::{
 pub struct StorageStatsState {
     pub pool: DbPool,
     pub storage: LocalStorageProvider,
-    #[allow(dead_code)]
-    pub config: Arc<AppConfig>,
 }
 
 #[derive(Debug, Serialize)]
@@ -36,11 +32,10 @@ pub struct StorageStatsResponse {
     pub total_trash_count: i64,
 }
 
-pub fn router(pool: DbPool, storage: LocalStorageProvider, config: Arc<AppConfig>) -> Router {
+pub fn router(pool: DbPool, storage: LocalStorageProvider) -> Router {
     let state = StorageStatsState {
         pool,
         storage,
-        config,
     };
     Router::new().route("/stats", get(get_storage_stats)).with_state(state)
 }
@@ -65,35 +60,36 @@ async fn get_storage_stats(
 
     let used_disk_bytes = total_disk_bytes.saturating_sub(available_disk_bytes);
 
-    // 2. Query database counts
-    let total_files_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media WHERE deleted_at IS NULL")
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or(0);
+    // 2. Single conditional aggregation instead of 4 separate COUNT queries
+    let counts: (i64, i64, i64, i64) = sqlx::query_as(
+        "SELECT \
+            COUNT(CASE WHEN deleted_at IS NULL THEN 1 END), \
+            COUNT(CASE WHEN media_type = 'image' AND deleted_at IS NULL THEN 1 END), \
+            COUNT(CASE WHEN media_type = 'video' AND deleted_at IS NULL THEN 1 END), \
+            COUNT(CASE WHEN deleted_at IS NOT NULL THEN 1 END) \
+         FROM media"
+    )
+    .fetch_one(&state.pool)
+    .await
+    .unwrap_or((0, 0, 0, 0));
 
-    let total_images_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media WHERE media_type = 'image' AND deleted_at IS NULL")
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or(0);
+    let (total_files_count, total_images_count, total_videos_count, total_trash_count) = counts;
 
-    let total_videos_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media WHERE media_type = 'video' AND deleted_at IS NULL")
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or(0);
-
-    let total_trash_count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM media WHERE deleted_at IS NOT NULL")
-        .fetch_one(&state.pool)
-        .await
-        .unwrap_or(0);
-
-    // 3. Compute real directory sizes on disk
+    // 3. Compute directory sizes off the Tokio worker thread via spawn_blocking
     let images_path = state.storage.get_full_path("originals/images").unwrap_or_default();
     let videos_path = state.storage.get_full_path("originals/videos").unwrap_or_default();
     let thumbs_path = state.storage.get_full_path("generated/thumbnails").unwrap_or_default();
 
-    let images_usage_bytes = calculate_dir_size(&images_path);
-    let videos_usage_bytes = calculate_dir_size(&videos_path);
-    let thumbnails_usage_bytes = calculate_dir_size(&thumbs_path);
+    let (images_usage_bytes, videos_usage_bytes, thumbnails_usage_bytes) =
+        tokio::task::spawn_blocking(move || {
+            (
+                calculate_dir_size(&images_path),
+                calculate_dir_size(&videos_path),
+                calculate_dir_size(&thumbs_path),
+            )
+        })
+        .await
+        .unwrap_or((0, 0, 0));
 
     let media_storage_bytes = images_usage_bytes + videos_usage_bytes + thumbnails_usage_bytes;
 

@@ -5,11 +5,8 @@ use axum::{
     Json, Router,
 };
 use serde::Deserialize;
-use std::sync::Arc;
-
 use crate::{
     auth::RequireAdmin,
-    config::AppConfig,
     database::DbPool,
     errors::AppError,
     models::{ApiLog, ApiResponse, PaginatedResponse},
@@ -18,8 +15,6 @@ use crate::{
 #[derive(Clone)]
 pub struct ActivityState {
     pub pool: DbPool,
-    #[allow(dead_code)]
-    pub config: Arc<AppConfig>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -28,8 +23,8 @@ pub struct ActivityQuery {
     pub offset: Option<i64>,
 }
 
-pub fn router(pool: DbPool, config: Arc<AppConfig>) -> Router {
-    let state = ActivityState { pool, config };
+pub fn router(pool: DbPool) -> Router {
+    let state = ActivityState { pool };
     Router::new().route("/", get(list_activity)).with_state(state)
 }
 

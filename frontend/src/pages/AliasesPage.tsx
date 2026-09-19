@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { api, AliasItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
-import { copyTextToClipboard } from '../utils/clipboard';
+import { copyWithToast } from '../utils/clipboard';
 import { Pagination } from '../components/common/Pagination';
 
 export const AliasesPage: React.FC = () => {
@@ -63,12 +63,7 @@ export const AliasesPage: React.FC = () => {
 
   const copyUrl = async (path: string) => {
     const fullUrl = `${window.location.origin}/a/${path}`;
-    const ok = await copyTextToClipboard(fullUrl);
-    if (ok) {
-      toast('Copied alias URL to clipboard!');
-    } else {
-      toast('Could not access clipboard. Please copy manually.', 'error');
-    }
+    await copyWithToast(fullUrl, toast, 'Copied alias URL to clipboard!');
   };
 
   const totalPages = Math.ceil(aliases.length / pageSize) || 1;
