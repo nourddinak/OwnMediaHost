@@ -1,0 +1,79 @@
+name: Build & Release Precompiled Binaries
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build Linux x86_64 Binaries
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Install System Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            build-essential pkg-config libssl-dev libsqlite3-dev
+
+      - name: Setup Rust Stable Toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust Dependencies Cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build Rust Backend Binary (Release Mode)
+        run: |
+          cargo build --release -p ownmediahost-backend
+          strip target/release/ownmediahost-backend
+          tar -czf ownmediahost-backend-linux-amd64.tar.gz -C target/release ownmediahost-backend
+
+      - name: Setup Node.js v22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build React Frontend Dashboard
+        run: |
+          cd frontend
+          npm install
+          npm run build
+          tar -czf ../ownmediahost-frontend-dist.tar.gz -C dist .
+          cd ..
+
+      - name: Generate Checksums
+        run: |
+          sha256sum ownmediahost-backend-linux-amd64.tar.gz ownmediahost-frontend-dist.tar.gz > SHA256SUMS
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'latest' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'OwnMediaHost Latest (Precompiled)' }}
+          body: |
+            Automated production release of OwnMediaHost for bare-metal VPS.
+            
+            ### Included Assets:
+            - **ownmediahost-backend-linux-amd64.tar.gz**: Precompiled Rust backend binary (optimized release build).
+            - **ownmediahost-frontend-dist.tar.gz**: Precompiled React frontend SPA bundle.
+            - **SHA256SUMS**: Cryptographic file checksums.
+            
+            *Instant installation: `deploy.sh` and `update.sh` automatically detect and download these assets in ~5 seconds, skipping VPS compilation.*
+          draft: false
+          prerelease: false
+          files: |
+            ownmediahost-backend-linux-amd64.tar.gz
+            ownmediahost-frontend-dist.tar.gz
+            SHA256SUMS
