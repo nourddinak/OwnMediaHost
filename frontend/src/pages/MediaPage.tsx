@@ -33,6 +33,7 @@ export const MediaPage: React.FC<MediaPageProps> = ({
   const [selectedFolder, setSelectedFolder] = useState<string>(folderId || '');
   const [sortBy, setSortBy] = useState<string>('newest');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [anchorId, setAnchorId] = useState<string | null>(null);
   const [activeMedia, setActiveMedia] = useState<MediaItem | null>(null);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
 
@@ -43,9 +44,11 @@ export const MediaPage: React.FC<MediaPageProps> = ({
     }
   }, [folderId]);
 
-  // Reset to page 1 on search or filter change
+  // Reset to page 1 and clear selection on search or filter change
   useEffect(() => {
     setPage(1);
+    setSelectedIds([]);
+    setAnchorId(null);
   }, [searchTerm, selectedFolder, sortBy, mediaTypeFilter]);
 
   const fetchMedia = useCallback(async () => {
@@ -84,15 +87,98 @@ export const MediaPage: React.FC<MediaPageProps> = ({
     setActiveMedia(media);
   };
 
-  const handleSelectCard = (media: MediaItem, multi: boolean) => {
-    setSelectedIds((prev) => {
-      if (prev.includes(media.id)) {
-        return prev.filter((id) => id !== media.id);
-      } else {
-        return multi ? [...prev, media.id] : [media.id];
+  const handleSelectCard = useCallback(
+    (
+      media: MediaItem,
+      e?: React.MouseEvent | { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }
+    ) => {
+      const isShift = !!e?.shiftKey;
+      const isCtrl = !!e?.ctrlKey || !!e?.metaKey;
+
+      setSelectedIds((prev) => {
+        // Shift-click: Range select from anchorId to clicked media
+        if (isShift) {
+          const anchorIndex = anchorId
+            ? mediaList.findIndex((m) => m.id === anchorId)
+            : 0;
+          const targetIndex = mediaList.findIndex((m) => m.id === media.id);
+
+          if (anchorIndex !== -1 && targetIndex !== -1) {
+            const start = Math.min(anchorIndex, targetIndex);
+            const end = Math.max(anchorIndex, targetIndex);
+            const rangeIds = mediaList.slice(start, end + 1).map((m) => m.id);
+
+            if (isCtrl) {
+              const next = new Set(prev);
+              for (const id of rangeIds) {
+                next.add(id);
+              }
+              return Array.from(next);
+            } else {
+              return rangeIds;
+            }
+          }
+        }
+
+        // Non-shift click: update anchor to this item
+        setAnchorId(media.id);
+        if (isCtrl || prev.includes(media.id)) {
+          if (prev.includes(media.id)) {
+            return prev.filter((id) => id !== media.id);
+          } else {
+            return [...prev, media.id];
+          }
+        } else {
+          return [...prev, media.id];
+        }
+      });
+    },
+    [mediaList, anchorId]
+  );
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (selectedIds.length === mediaList.length) {
+      setSelectedIds([]);
+      setAnchorId(null);
+    } else {
+      setSelectedIds(mediaList.map((m) => m.id));
+      if (mediaList.length > 0) {
+        setAnchorId(mediaList[0].id);
       }
-    });
-  };
+    }
+  }, [mediaList, selectedIds.length]);
+
+  // Global Keyboard Shortcuts: Ctrl+A / Cmd+A to select all, Esc to clear selection
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+        e.preventDefault();
+        setSelectedIds(mediaList.map((m) => m.id));
+        if (mediaList.length > 0) {
+          setAnchorId(mediaList[0].id);
+        }
+      } else if (e.key === 'Escape') {
+        if (selectedIds.length > 0) {
+          e.preventDefault();
+          setSelectedIds([]);
+          setAnchorId(null);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [mediaList, selectedIds.length]);
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
@@ -103,6 +189,7 @@ export const MediaPage: React.FC<MediaPageProps> = ({
       });
       toast(`Moved ${selectedIds.length} items to trash`);
       setSelectedIds([]);
+      setAnchorId(null);
       fetchMedia();
       onDataChanged();
     } catch (err: any) {
@@ -120,6 +207,7 @@ export const MediaPage: React.FC<MediaPageProps> = ({
       });
       toast(`Moved ${selectedIds.length} items`);
       setSelectedIds([]);
+      setAnchorId(null);
       fetchMedia();
       onDataChanged();
     } catch (err: any) {
@@ -243,10 +331,30 @@ export const MediaPage: React.FC<MediaPageProps> = ({
 
         {/* Count or Bulk Actions */}
         {selectedIds.length > 0 ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '13px', color: 'var(--text-secondary)', fontWeight: 600 }}>
               {selectedIds.length} selected
             </span>
+            <button
+              onClick={handleToggleSelectAll}
+              className="btn btn-ghost press-scale"
+              style={{ fontSize: '12px', padding: '5px 8px' }}
+              title="Toggle Select All on this page (Ctrl+A)"
+            >
+              {selectedIds.length === mediaList.length ? 'Deselect All' : `Select All (${mediaList.length})`}
+            </button>
+            {selectedIds.length === 1 && (
+              <button
+                onClick={() => {
+                  const item = mediaList.find((m) => m.id === selectedIds[0]);
+                  if (item) setActiveMedia(item);
+                }}
+                className="btn btn-secondary press-scale"
+                style={{ padding: '5px 10px', fontSize: '12px' }}
+              >
+                View Details
+              </button>
+            )}
             <button
               onClick={handleBulkDelete}
               className="btn btn-danger press-scale"
@@ -279,17 +387,33 @@ export const MediaPage: React.FC<MediaPageProps> = ({
               ))}
             </select>
             <button
-              onClick={() => setSelectedIds([])}
+              onClick={() => {
+                setSelectedIds([]);
+                setAnchorId(null);
+              }}
               className="btn btn-ghost press-scale"
               style={{ fontSize: '12px', padding: '5px 8px' }}
+              title="Clear selection (Esc)"
             >
               Clear
             </button>
           </div>
         ) : (
-          <span style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>
-            {total} {total === 1 ? 'file' : 'files'}
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span style={{ fontSize: '13px', color: 'var(--text-tertiary)' }}>
+              {total} {total === 1 ? 'file' : 'files'}
+            </span>
+            {mediaList.length > 0 && (
+              <button
+                onClick={handleToggleSelectAll}
+                className="btn btn-ghost press-scale"
+                style={{ fontSize: '12px', padding: '4px 8px', color: 'var(--text-tertiary)' }}
+                title="Select all on this page (Ctrl+A)"
+              >
+                Select All
+              </button>
+            )}
+          </div>
         )}
       </div>
 
@@ -337,12 +461,13 @@ export const MediaPage: React.FC<MediaPageProps> = ({
           </div>
         </div>
       ) : viewMode === 'grid' ? (
-        <div className="media-grid">
+        <div className={`media-grid ${selectedIds.length > 0 ? 'has-selection' : ''}`}>
           {mediaList.map((item) => (
             <MediaCard
               key={item.id}
               media={item}
               isSelected={selectedIds.includes(item.id)}
+              isSelectionMode={selectedIds.length > 0}
               onSelect={handleSelectCard}
               onClick={handleCardClick}
             />
@@ -361,7 +486,20 @@ export const MediaPage: React.FC<MediaPageProps> = ({
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)' }}>
-                <th style={{ padding: '12px 16px', width: '40px' }}></th>
+                <th style={{ padding: '12px 16px', width: '40px' }}>
+                  <input
+                    type="checkbox"
+                    checked={mediaList.length > 0 && selectedIds.length === mediaList.length}
+                    ref={(el) => {
+                      if (el) {
+                        el.indeterminate = selectedIds.length > 0 && selectedIds.length < mediaList.length;
+                      }
+                    }}
+                    onChange={handleToggleSelectAll}
+                    style={{ cursor: 'pointer' }}
+                    title={selectedIds.length === mediaList.length ? 'Deselect All' : 'Select All'}
+                  />
+                </th>
                 <th style={{ padding: '12px 16px' }}>Name</th>
                 <th style={{ padding: '12px 16px' }}>Type</th>
                 <th style={{ padding: '12px 16px' }}>Size</th>
@@ -375,18 +513,34 @@ export const MediaPage: React.FC<MediaPageProps> = ({
                 return (
                   <tr
                     key={item.id}
-                    onClick={() => handleCardClick(item)}
+                    onClick={(e) => {
+                      if (e.shiftKey || e.ctrlKey || e.metaKey || selectedIds.length > 0) {
+                        e.preventDefault();
+                        handleSelectCard(item, e);
+                      } else {
+                        handleCardClick(item);
+                      }
+                    }}
+                    onDoubleClick={(e) => {
+                      e.preventDefault();
+                      handleCardClick(item);
+                    }}
                     style={{
                       borderBottom: '1px solid var(--border-subtle)',
                       cursor: 'pointer',
                       background: isSelected ? 'rgba(41, 151, 255, 0.08)' : 'transparent',
+                      userSelect: 'none',
                     }}
                   >
                     <td style={{ padding: '10px 16px' }} onClick={(e) => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={isSelected}
-                        onChange={() => handleSelectCard(item, false)}
+                        onClick={(e) => {
+                          handleSelectCard(item, e);
+                        }}
+                        onChange={() => {}}
+                        style={{ cursor: 'pointer' }}
                       />
                     </td>
                     <td style={{ padding: '10px 16px', fontWeight: 500 }}>{item.filename}</td>

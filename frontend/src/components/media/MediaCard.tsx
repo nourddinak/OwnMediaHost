@@ -5,13 +5,18 @@ import { formatBytes, formatDuration } from '../../utils/formatters';
 interface MediaCardProps {
   media: MediaItem;
   isSelected: boolean;
-  onSelect: (media: MediaItem, multiSelect: boolean) => void;
+  isSelectionMode?: boolean;
+  onSelect: (
+    media: MediaItem,
+    e?: React.MouseEvent | { shiftKey?: boolean; ctrlKey?: boolean; metaKey?: boolean }
+  ) => void;
   onClick: (media: MediaItem) => void;
 }
 
 export const MediaCard: React.FC<MediaCardProps> = ({
   media,
   isSelected,
+  isSelectionMode = false,
   onSelect,
   onClick,
 }) => {
@@ -27,7 +32,18 @@ export const MediaCard: React.FC<MediaCardProps> = ({
   return (
     <div
       className={`media-card ${isSelected ? 'selected' : ''}`}
-      onClick={() => onClick(media)}
+      onClick={(e) => {
+        if (e.shiftKey || e.ctrlKey || e.metaKey || isSelectionMode) {
+          e.preventDefault();
+          onSelect(media, e);
+        } else {
+          onClick(media);
+        }
+      }}
+      onDoubleClick={(e) => {
+        e.preventDefault();
+        onClick(media);
+      }}
     >
       <div className="media-thumbnail-container">
         {media.media_type === 'video' ? (
@@ -112,23 +128,28 @@ export const MediaCard: React.FC<MediaCardProps> = ({
 
         {/* Selection Checkbox */}
         <div
+          className="card-select-btn"
           onClick={(e) => {
             e.stopPropagation();
-            onSelect(media, e.shiftKey);
+            onSelect(media, e);
           }}
+          title={isSelected ? 'Deselect (or Shift+Click to range select)' : 'Select (or Shift+Click to range select)'}
           style={{
             position: 'absolute',
             top: '8px',
             left: '8px',
-            width: '18px',
-            height: '18px',
+            width: '20px',
+            height: '20px',
             borderRadius: '4px',
-            border: isSelected ? 'none' : '1px solid rgba(255,255,255,0.4)',
-            background: isSelected ? 'var(--accent-blue)' : 'rgba(0,0,0,0.4)',
+            border: isSelected ? 'none' : '1.5px solid rgba(255,255,255,0.6)',
+            background: isSelected ? 'var(--accent-blue)' : 'rgba(0,0,0,0.45)',
+            backdropFilter: 'blur(4px)',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             cursor: 'pointer',
+            zIndex: 3,
+            transition: 'all 0.15s ease',
           }}
         >
           {isSelected && (

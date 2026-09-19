@@ -249,6 +249,8 @@ input, select, textarea {
   cursor: pointer;
   display: flex;
   flex-direction: column;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .media-card:hover {
@@ -260,6 +262,19 @@ input, select, textarea {
 .media-card.selected {
   border-color: var(--accent-blue);
   box-shadow: 0 0 0 2px rgba(41, 151, 255, 0.4);
+}
+
+.media-card .card-select-btn {
+  opacity: 0;
+  transform: scale(0.9);
+  transition: opacity var(--transition-fast), transform var(--transition-fast);
+}
+
+.media-card:hover .card-select-btn,
+.media-card.selected .card-select-btn,
+.media-grid.has-selection .media-card .card-select-btn {
+  opacity: 1;
+  transform: scale(1);
 }
 
 .media-thumbnail-container {
