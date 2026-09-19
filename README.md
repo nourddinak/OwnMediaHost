@@ -272,14 +272,30 @@ Hosting a status page on the same server as your application is an anti-pattern:
                     └───────────────────────────────────────────────►│
 ```
 
-#### 1. Fork & Deploy the Status Repository (60 Seconds)
+#### Choose Your Deployment Method:
+
+##### Option A: Zero-Setup Instant Status (No Forking Required)
+
+You don't even need to fork the repository or configure GitHub Pages if you don't want to! You can use the official hosted status page:
+
+1. On your VPS, allow the hosted status origin:
+   ```bash
+   sudo bash /opt/ownmediahost/scripts/connect-status.sh "https://nourddinak.github.io/OwnMediaHost-status/"
+   ```
+2. Link your users directly to your instance with the `?api=` parameter:
+   ```text
+   https://nourddinak.github.io/OwnMediaHost-status/?api=https://media.yourdomain.com
+   ```
+   Because probing happens client-side in the visitor's browser, the status page will dynamically probe your backend, measure live latency, and display your operational status!
+
+##### Option B: Fork & Deploy to Your Own GitHub Pages or Custom Domain
 
 1. Fork or use the template: [github.com/nourddinak/OwnMediaHost-status](https://github.com/nourddinak/OwnMediaHost-status).
 2. Go to **Settings** → **Pages** → under **Source**, select **GitHub Actions**.
 3. Trigger the preconfigured workflow under the **Actions** tab.
-4. Your public status page is now live at `https://<your-username>.github.io/OwnMediaHost-status/` (or your custom domain like `status.example.com`).
+4. (Optional) In **Settings** → **Pages**, configure a custom domain like `status.yourdomain.com`.
 
-#### 2. Connect Your Backend to the Status Page
+#### Connect Your Backend to the Status Page
 
 Run the automated connection utility on your server:
 
