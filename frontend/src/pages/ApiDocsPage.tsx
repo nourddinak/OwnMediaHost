@@ -9,6 +9,7 @@ interface EndpointDef {
   description: string;
   category: string;
   auth: boolean;
+  permission?: string;
   params?: { name: string; in: 'query' | 'path' | 'body'; type: string; required: boolean; description: string }[];
   bodyExample?: string;
   responseExample: string;
@@ -76,6 +77,7 @@ const ENDPOINTS: EndpointDef[] = [
     description: 'Retrieve a paginated list of media files with optional filtering by type, folder, tag, visibility, and full-text search. Supports sorting and pagination.',
     category: 'Media',
     auth: true,
+    permission: 'files:read',
     params: [
       { name: 'limit', in: 'query', type: 'integer', required: false, description: 'Max items to return (default: 50, max: 200)' },
       { name: 'offset', in: 'query', type: 'integer', required: false, description: 'Pagination offset (default: 0)' },
@@ -126,6 +128,7 @@ const ENDPOINTS: EndpointDef[] = [
     description: 'Upload an image or video file via multipart/form-data. Supports optional folder assignment, tags, vanity alias, and client-generated thumbnail for videos.',
     category: 'Media',
     auth: true,
+    permission: 'files:write',
     params: [
       { name: 'file', in: 'body', type: 'file', required: true, description: 'The media file to upload (multipart field)' },
       { name: 'folder_id', in: 'body', type: 'string', required: false, description: 'UUID of folder to place the file in' },
@@ -175,6 +178,7 @@ curl -X POST {BASE_URL}/api/v1/files \\
     description: 'Update a file\'s metadata including filename, folder assignment, visibility, and tags. All fields are optional.',
     category: 'Media',
     auth: true,
+    permission: 'files:write',
     params: [
       { name: 'id', in: 'path', type: 'string', required: true, description: 'File UUID or public ID' },
     ],
@@ -197,6 +201,7 @@ curl -X POST {BASE_URL}/api/v1/files \\
     description: 'Moves a file to the trash. The file can be restored within the retention period (default: 30 days).',
     category: 'Media',
     auth: true,
+    permission: 'files:delete',
     params: [{ name: 'id', in: 'path', type: 'string', required: true, description: 'File UUID or public ID' }],
     responseExample: `{
   "success": true,
@@ -211,6 +216,7 @@ curl -X POST {BASE_URL}/api/v1/files \\
     description: 'Restores a previously soft-deleted file from the trash back to the media library.',
     category: 'Media',
     auth: true,
+    permission: 'files:write',
     params: [{ name: 'id', in: 'path', type: 'string', required: true, description: 'File UUID or public ID' }],
     responseExample: `{
   "success": true,
@@ -225,6 +231,7 @@ curl -X POST {BASE_URL}/api/v1/files \\
     description: 'Irrevocably deletes the file from disk and database. This action cannot be undone.',
     category: 'Media',
     auth: true,
+    permission: 'files:delete',
     params: [{ name: 'id', in: 'path', type: 'string', required: true, description: 'File UUID or public ID' }],
     responseExample: `{
   "success": true,
@@ -239,6 +246,7 @@ curl -X POST {BASE_URL}/api/v1/files \\
     description: 'Replace the actual file content of an existing media item while preserving its ID, public ID, aliases, and metadata.',
     category: 'Media',
     auth: true,
+    permission: 'files:write',
     params: [
       { name: 'id', in: 'path', type: 'string', required: true, description: 'File UUID or public ID' },
       { name: 'file', in: 'body', type: 'file', required: true, description: 'Replacement file (multipart)' },
@@ -257,6 +265,7 @@ curl -X POST {BASE_URL}/api/v1/files \\
     description: 'Retrieve all folders. Each folder includes its media count.',
     category: 'Folders',
     auth: true,
+    permission: 'folders:read',
     responseExample: `{
   "success": true,
   "data": [
@@ -279,6 +288,7 @@ curl -X POST {BASE_URL}/api/v1/files \\
     description: 'Create a new folder for organizing media files.',
     category: 'Folders',
     auth: true,
+    permission: 'folders:write',
     bodyExample: `{
   "name": "Screenshots",
   "parent_id": null
@@ -303,6 +313,7 @@ curl -X POST {BASE_URL}/api/v1/files \\
     description: 'Delete a folder. Files inside are unassigned (moved to root), not deleted.',
     category: 'Folders',
     auth: true,
+    permission: 'folders:write',
     params: [{ name: 'id', in: 'path', type: 'string', required: true, description: 'Folder UUID' }],
     responseExample: `{
   "success": true,
@@ -318,6 +329,7 @@ curl -X POST {BASE_URL}/api/v1/files \\
     description: 'Retrieve all vanity URL aliases. Aliases map human-readable paths like /i/hero to media files.',
     category: 'Aliases',
     auth: true,
+    permission: 'aliases:read',
     responseExample: `{
   "success": true,
   "data": [
@@ -342,6 +354,7 @@ curl -X POST {BASE_URL}/api/v1/files \\
     description: 'Create a human-readable vanity URL alias for a media file. The alias becomes accessible at /i/{alias_path}.',
     category: 'Aliases',
     auth: true,
+    permission: 'aliases:write',
     bodyExample: `{
   "alias_path": "logo",
   "media_id": "f_abc123"
@@ -366,6 +379,7 @@ curl -X POST {BASE_URL}/api/v1/files \\
     description: 'List all API keys for the authenticated user. Secret key values are never returned after creation.',
     category: 'API Keys',
     auth: true,
+    permission: 'admin',
     responseExample: `{
   "success": true,
   "data": [
@@ -388,6 +402,7 @@ curl -X POST {BASE_URL}/api/v1/files \\
     description: 'Generate a new scoped API key. The full secret key is returned ONLY once in the response and cannot be retrieved again.',
     category: 'API Keys',
     auth: true,
+    permission: 'admin',
     bodyExample: `{
   "name": "my-app",
   "permissions": ["files.read", "files.write", "folders.read", "folders.write"],
@@ -414,6 +429,7 @@ curl -X POST {BASE_URL}/api/v1/files \\
     description: 'Returns real-time disk usage statistics including total/available disk space, per-type breakdowns, and file counts.',
     category: 'System',
     auth: true,
+    permission: 'admin',
     responseExample: `{
   "success": true,
   "data": {
@@ -451,14 +467,14 @@ function generateSnippet(ep: EndpointDef, lang: SnippetLang, baseUrl: string, ap
 
   if (lang === 'curl') {
     let cmd = `curl -X ${ep.method} "${fullUrl}"`;
-    if (ep.auth) cmd += ` \\\n  -H "X-API-Key: ${keyHeader}"`;
+    if (ep.auth) cmd += ` \\\n  -H "Authorization: Bearer ${keyHeader}"`;
     if (ep.bodyExample && !ep.bodyExample.startsWith('#')) {
       cmd += ` \\\n  -H "Content-Type: application/json"`;
       cmd += ` \\\n  -d '${ep.bodyExample.trim()}'`;
     }
     if (ep.method === 'POST' && ep.path.endsWith('/files') && !ep.path.includes('{')) {
       cmd = `curl -X POST "${fullUrl}"`;
-      if (ep.auth) cmd += ` \\\n  -H "X-API-Key: ${keyHeader}"`;
+      if (ep.auth) cmd += ` \\\n  -H "Authorization: Bearer ${keyHeader}"`;
       cmd += ` \\\n  -F "file=@./photo.jpg"`;
       cmd += ` \\\n  -F "tags=portfolio,nature"`;
       cmd += ` \\\n  -F "alias=my-photo"`;
@@ -476,7 +492,7 @@ formData.append('alias', 'my-photo');
 const response = await fetch('${fullUrl}', {
   method: 'POST',
   headers: {
-    'X-API-Key': '${keyHeader}',
+    'Authorization': 'Bearer ${keyHeader}',
   },
   body: formData,
 });
@@ -492,7 +508,7 @@ console.log('Uploaded:', data.url);`;
     return `const response = await fetch('${fullUrl}', {
   method: '${ep.method}',
   headers: {
-    'Content-Type': 'application/json',${ep.auth ? `\n    'X-API-Key': '${keyHeader}',` : ''}
+    'Content-Type': 'application/json',${ep.auth ? `\n    'Authorization': 'Bearer ${keyHeader}',` : ''}
   }${body},
 });
 
@@ -505,7 +521,7 @@ console.log(data);`;
       return `import requests
 
 url = "${fullUrl}"
-headers = {"X-API-Key": "${keyHeader}"}
+headers = {"Authorization": "Bearer ${keyHeader}"}
 
 with open("photo.jpg", "rb") as f:
     files = {"file": ("photo.jpg", f, "image/jpeg")}
@@ -523,7 +539,7 @@ print("Uploaded:", result["data"]["url"])`;
     return `import requests
 
 url = "${fullUrl}"
-headers = {${ep.auth ? `\n    "X-API-Key": "${keyHeader}",` : ''}
+headers = {${ep.auth ? `\n    "Authorization": "Bearer ${keyHeader}",` : ''}
     "Content-Type": "application/json",
 }
 
@@ -543,7 +559,7 @@ function MediaGallery() {
 
   useEffect(() => {
     fetch(\`\${BASE}/api/v1/files?limit=20\`, {
-      headers: { 'X-API-Key': API_KEY },
+      headers: { 'Authorization': \`Bearer \${API_KEY}\` },
     })
       .then(res => res.json())
       .then(({ data }) => setFiles(data.items));
@@ -586,7 +602,7 @@ function FileUploader() {
 
     const res = await fetch(\`\${BASE}/api/v1/files\`, {
       method: 'POST',
-      headers: { 'X-API-Key': API_KEY },
+      headers: { 'Authorization': \`Bearer \${API_KEY}\` },
       body: form,
     });
     const { data } = await res.json();
@@ -659,8 +675,8 @@ export const ApiDocsPage: React.FC = () => {
 
       const headers: Record<string, string> = {};
       if (ep.auth && apiKey) {
-        headers['X-API-Key'] = apiKey;
-        headers['Authorization'] = `Bearer ${apiKey}`;
+        // Universal Authorization header allowed by CORS on all server & proxy environments
+        headers['Authorization'] = `Bearer ${apiKey.trim()}`;
       }
       const res = await fetch(url, {
         method: ep.method === 'POST' || ep.method === 'PUT' || ep.method === 'PATCH' ? 'GET' : ep.method,
@@ -843,6 +859,11 @@ export const ApiDocsPage: React.FC = () => {
             {ep.auth && (
               <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(251, 146, 60, 0.15)', color: '#fb923c', fontWeight: 600 }}>
                 AUTH
+              </span>
+            )}
+            {ep.permission && (
+              <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)', fontWeight: 600, fontFamily: 'monospace' }}>
+                SCOPE: {ep.permission}
               </span>
             )}
           </div>
@@ -1037,6 +1058,16 @@ export const ApiDocsPage: React.FC = () => {
                 >
                   {liveResponse.body}
                 </pre>
+                {liveResponse.status === 403 && (
+                  <div style={{ padding: '10px 16px', background: 'rgba(239, 68, 68, 0.1)', borderTop: '1px solid rgba(239, 68, 68, 0.2)', fontSize: '12px', color: '#fca5a5' }}>
+                    ⚠️ <strong>Permission Denied (403):</strong> Your API key does not have the <code>{ep.permission || 'required'}</code> permission for this endpoint. Go to <strong>Settings → API Keys</strong> to generate a key with the appropriate scope.
+                  </div>
+                )}
+                {liveResponse.status === 401 && (
+                  <div style={{ padding: '10px 16px', background: 'rgba(239, 68, 68, 0.1)', borderTop: '1px solid rgba(239, 68, 68, 0.2)', fontSize: '12px', color: '#fca5a5' }}>
+                    ⚠️ <strong>Unauthorized (401):</strong> Missing or invalid API key. Make sure to paste a valid key starting with <code>mk_live_</code> into the API Key input above.
+                  </div>
+                )}
               </div>
             )}
           </div>

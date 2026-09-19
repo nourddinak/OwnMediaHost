@@ -117,7 +117,9 @@ impl AuthIdentity {
     pub fn is_admin(&self) -> bool {
         match self {
             AuthIdentity::Admin(_) => true,
-            AuthIdentity::ApiKey { scopes, .. } => scopes.iter().any(|s| s == "admin"),
+            AuthIdentity::ApiKey { scopes, .. } => {
+                scopes.iter().any(|s| s == "admin" || s == "*")
+            }
         }
     }
 
@@ -125,7 +127,12 @@ impl AuthIdentity {
         match self {
             AuthIdentity::Admin(_) => true,
             AuthIdentity::ApiKey { scopes, .. } => {
-                scopes.iter().any(|s| s == "admin" || s == permission)
+                scopes.iter().any(|s| {
+                    s == "admin"
+                        || s == "*"
+                        || s == permission
+                        || (s.ends_with(":*") && permission.starts_with(s.trim_end_matches('*')))
+                })
             }
         }
     }
@@ -289,7 +296,20 @@ where
         let auth = RequireAuth::from_request_parts(parts, state).await?;
         match auth.0 {
             AuthIdentity::Admin(u) => Ok(RequireAdmin(u)),
-            AuthIdentity::ApiKey { .. } => Err(AppError::Forbidden("Administrator access required".into())),
+            AuthIdentity::ApiKey { ref scopes, ref api_key } => {
+                if scopes.iter().any(|s| s == "admin" || s == "*") {
+                    let synthetic_user = User {
+                        id: format!("apikey:{}", api_key.id),
+                        email: format!("apikey+{}@ownmediahost.local", api_key.name),
+                        password_hash: String::new(),
+                        created_at: api_key.created_at.clone(),
+                        updated_at: api_key.created_at.clone(),
+                    };
+                    Ok(RequireAdmin(synthetic_user))
+                } else {
+                    Err(AppError::Forbidden("Administrator access required".into()))
+                }
+            }
         }
     }
 }
