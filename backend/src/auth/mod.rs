@@ -160,70 +160,93 @@ where
             .cloned()
             .ok_or_else(|| AppError::Internal("AppConfig not found in request".into()))?;
 
-        // 1. Check Authorization header: Bearer <key_or_token>
+        // 1. Check X-API-Key header
+        let mut api_key_from_header: Option<String> = None;
+        if let Some(key_val) = parts.headers.get("x-api-key") {
+            if let Ok(key_str) = key_val.to_str() {
+                let trimmed = key_str.trim();
+                if !trimmed.is_empty() {
+                    api_key_from_header = Some(trimmed.to_string());
+                }
+            }
+        }
+
+        // 2. Check Authorization header: Bearer <key_or_token> or direct mk_live_
         if let Some(auth_val) = parts.headers.get(header::AUTHORIZATION) {
             if let Ok(auth_str) = auth_val.to_str() {
-                if let Some(token) = auth_str.strip_prefix("Bearer ") {
+                let trimmed = auth_str.trim();
+                if let Some(token) = trimmed.strip_prefix("Bearer ") {
                     let token = token.trim();
-
-                    // Check if it's an API Key
                     if token.starts_with("mk_live_") {
-                        let hash = hash_api_key(token, &config.api_key_pepper);
-                        let key_res: Option<ApiKey> = sqlx::query_as(
-                            "SELECT * FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL"
-                        )
-                        .bind(&hash)
-                        .fetch_optional(&pool)
-                        .await
-                        .map_err(|e| AppError::Internal(format!("DB error verifying key: {}", e)))?;
+                        if api_key_from_header.is_none() {
+                            api_key_from_header = Some(token.to_string());
+                        }
+                    } else {
+                        // Check if it's a bearer session token
+                        if let Some(user_id) = verify_session_token(token, &config.cookie_secret) {
+                            let user: Option<User> = sqlx::query_as("SELECT * FROM users WHERE id = ?")
+                                .bind(&user_id)
+                                .fetch_optional(&pool)
+                                .await
+                                .map_err(|e| AppError::Internal(format!("DB error finding user: {}", e)))?;
 
-                        if let Some(api_key) = key_res {
-                            // Check expiration
-                            if let Some(exp) = &api_key.expires_at {
-                                if let Ok(exp_dt) = chrono::DateTime::parse_from_rfc3339(exp) {
-                                    if exp_dt < chrono::Utc::now() {
-                                        return Err(AppError::Unauthorized("API key has expired".into()));
-                                    }
-                                }
+                            if let Some(u) = user {
+                                return Ok(RequireAuth(AuthIdentity::Admin(u)));
                             }
-
-                            // Update last used asynchronously
-                            let key_id = api_key.id.clone();
-                            let pool_clone = pool.clone();
-                            tokio::spawn(async move {
-                                let now = chrono::Utc::now().to_rfc3339();
-                                let _ = sqlx::query("UPDATE api_keys SET last_used_at = ? WHERE id = ?")
-                                    .bind(now)
-                                    .bind(key_id)
-                                    .execute(&pool_clone)
-                                    .await;
-                            });
-
-                            let scopes: Vec<String> = api_key
-                                .permissions
-                                .split(',')
-                                .map(|s| s.trim().to_string())
-                                .collect();
-
-                            return Ok(RequireAuth(AuthIdentity::ApiKey { api_key, scopes }));
-                        } else {
-                            return Err(AppError::Unauthorized("Invalid or revoked API key".into()));
                         }
                     }
-
-                    // Check if it's a bearer session token
-                    if let Some(user_id) = verify_session_token(token, &config.cookie_secret) {
-                        let user: Option<User> = sqlx::query_as("SELECT * FROM users WHERE id = ?")
-                            .bind(&user_id)
-                            .fetch_optional(&pool)
-                            .await
-                            .map_err(|e| AppError::Internal(format!("DB error finding user: {}", e)))?;
-
-                        if let Some(u) = user {
-                            return Ok(RequireAuth(AuthIdentity::Admin(u)));
-                        }
-                    }
+                } else if trimmed.starts_with("mk_live_") && api_key_from_header.is_none() {
+                    api_key_from_header = Some(trimmed.to_string());
                 }
+            }
+        }
+
+        // If an API key was found in X-API-Key or Authorization header:
+        if let Some(token) = api_key_from_header {
+            if token.starts_with("mk_live_") {
+                let hash = hash_api_key(&token, &config.api_key_pepper);
+                let key_res: Option<ApiKey> = sqlx::query_as(
+                    "SELECT * FROM api_keys WHERE key_hash = ? AND revoked_at IS NULL"
+                )
+                .bind(&hash)
+                .fetch_optional(&pool)
+                .await
+                .map_err(|e| AppError::Internal(format!("DB error verifying key: {}", e)))?;
+
+                if let Some(api_key) = key_res {
+                    // Check expiration
+                    if let Some(exp) = &api_key.expires_at {
+                        if let Ok(exp_dt) = chrono::DateTime::parse_from_rfc3339(exp) {
+                            if exp_dt < chrono::Utc::now() {
+                                return Err(AppError::Unauthorized("API key has expired".into()));
+                            }
+                        }
+                    }
+
+                    // Update last used asynchronously
+                    let key_id = api_key.id.clone();
+                    let pool_clone = pool.clone();
+                    tokio::spawn(async move {
+                        let now = chrono::Utc::now().to_rfc3339();
+                        let _ = sqlx::query("UPDATE api_keys SET last_used_at = ? WHERE id = ?")
+                            .bind(now)
+                            .bind(key_id)
+                            .execute(&pool_clone)
+                            .await;
+                    });
+
+                    let scopes: Vec<String> = api_key
+                        .permissions
+                        .split(',')
+                        .map(|s| s.trim().to_string())
+                        .collect();
+
+                    return Ok(RequireAuth(AuthIdentity::ApiKey { api_key, scopes }));
+                } else {
+                    return Err(AppError::Unauthorized("Invalid or revoked API key".into()));
+                }
+            } else {
+                return Err(AppError::Unauthorized("Invalid API key format (must begin with mk_live_)".into()));
             }
         }
 

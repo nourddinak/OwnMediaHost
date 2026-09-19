@@ -60,6 +60,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             header::ACCEPT,
             header::RANGE,
             header::HeaderName::from_static("x-request-id"),
+            header::HeaderName::from_static("x-api-key"),
         ])
         .allow_credentials(true)
         .allow_origin(AllowOrigin::predicate({

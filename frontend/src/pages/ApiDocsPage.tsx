@@ -650,11 +650,17 @@ export const ApiDocsPage: React.FC = () => {
     setLiveResponse(null);
     const start = performance.now();
     try {
-      // Use relative path so the request goes through the Vite proxy (dev) or same-origin (prod)
-      const url = ep.path;
+      // In local dev targeting localhost, route through Vite proxy (/api, /health)
+      // In production (or targeting external URL), fetch directly from the API base domain
+      const isLocalhost = !baseUrl || baseUrl.includes('localhost') || baseUrl.includes('127.0.0.1');
+      const url = (import.meta.env.DEV && isLocalhost)
+        ? ep.path
+        : `${baseUrl.replace(/\/+$/, '')}${ep.path}`;
+
       const headers: Record<string, string> = {};
       if (ep.auth && apiKey) {
         headers['X-API-Key'] = apiKey;
+        headers['Authorization'] = `Bearer ${apiKey}`;
       }
       const res = await fetch(url, {
         method: ep.method === 'POST' || ep.method === 'PUT' || ep.method === 'PATCH' ? 'GET' : ep.method,
