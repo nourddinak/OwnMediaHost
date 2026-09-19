@@ -60,6 +60,7 @@ REPO_DIR="${TARGET_INSTALL_DIR}"
 
 BUILD_FROM_SOURCE=false
 STATUS_DOMAIN_CLI=""
+STATUS_URL_CLI=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --build-from-source|-b)
@@ -68,6 +69,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --status-domain)
             STATUS_DOMAIN_CLI="$2"
+            shift 2
+            ;;
+        --status-url)
+            STATUS_URL_CLI="$2"
             shift 2
             ;;
         -*)
@@ -280,12 +285,29 @@ EOF
 fi
 
 # 2b. Synchronize Public Status Page Assets
-if [ -d "${REPO_DIR}/status" ]; then
-    log_info "Synchronizing public status page assets..."
+if [ -d "${REPO_DIR}/status" ] && [ -f "${REPO_DIR}/status/index.html" ]; then
+    log_info "Synchronizing public status page assets from local files..."
     as_root mkdir -p /var/www/ownmediahost/status
     as_root cp -rf "${REPO_DIR}/status/"* /var/www/ownmediahost/status/
     as_root chown -R www-data:www-data /var/www/ownmediahost/status 2>/dev/null || true
     log_success "Public status page assets refreshed."
+elif [ -d "/var/www/ownmediahost/status/.git" ]; then
+    log_info "Synchronizing public status page from Git repository..."
+    (cd /var/www/ownmediahost/status && as_root git pull --ff-only 2>/dev/null || true)
+    as_root chown -R www-data:www-data /var/www/ownmediahost/status 2>/dev/null || true
+    log_success "Public status page Git repository updated."
+elif [ -n "$STATUS_DOMAIN" ] && have git; then
+    log_info "Cloning public status page repository..."
+    as_root mkdir -p /var/www/ownmediahost/status
+    as_root git clone "https://github.com/nourddinak/OwnMediaHost-status.git" /var/www/ownmediahost/status 2>/dev/null || true
+    as_root chown -R www-data:www-data /var/www/ownmediahost/status 2>/dev/null || true
+    log_success "Public status page repository initialized."
+fi
+
+# Connect status URL if explicitly provided
+if [ -n "$STATUS_URL_CLI" ] && [ -f "${REPO_DIR}/scripts/connect-status.sh" ]; then
+    log_info "Updating public status page connection (${STATUS_URL_CLI})..."
+    as_root bash "${REPO_DIR}/scripts/connect-status.sh" --url "$STATUS_URL_CLI" 2>/dev/null || true
 fi
 
 # 3. Verify Database CLI & Media Engine

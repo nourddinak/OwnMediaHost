@@ -185,6 +185,8 @@ ADMIN_PASSWORD=""
 SKIP_DEPS=false
 BUILD_FROM_SOURCE=false
 STATUS_DOMAIN=""
+STATUS_URL=""
+STATUS_REPO_URL="${STATUS_REPO_URL:-https://github.com/nourddinak/OwnMediaHost-status.git}"
 
 # --- Parse CLI Arguments ---
 while [[ $# -gt 0 ]]; do
@@ -255,6 +257,14 @@ while [[ $# -gt 0 ]]; do
             STATUS_DOMAIN="$2"
             shift 2
             ;;
+        --status-url)
+            STATUS_URL="$2"
+            shift 2
+            ;;
+        --status-repo)
+            STATUS_REPO_URL="$2"
+            shift 2
+            ;;
         --password)
             ADMIN_PASSWORD="$2"
             shift 2
@@ -290,6 +300,8 @@ while [[ $# -gt 0 ]]; do
             echo "  --frontend-domain <domain>  Frontend domain for split deployment"
             echo "  --backend-domain <domain>   Backend domain for split deployment"
             echo "  --status-domain <domain>    Decoupled public status page domain (e.g. status.example.com)"
+            echo "  --status-url <url>          External/GitHub Pages status page URL (e.g. https://user.github.io/status)"
+            echo "  --status-repo <git_url>     Git repo for status assets (default: https://github.com/nourddinak/OwnMediaHost-status.git)"
             echo "  --port <port>               Internal backend port (default: 8080)"
             echo "  --storage-dir <path>        Persistent storage path (default: /var/lib/ownmediahost/storage)"
             echo "  --email <email>             Initial admin email"
@@ -421,11 +433,17 @@ interactive_wizard() {
     fi
 
     # Decoupled Public Status Page (Optional)
-    if [[ -z "$STATUS_DOMAIN" ]]; then
+    if [[ -z "$STATUS_DOMAIN" && -z "$STATUS_URL" ]]; then
         echo -e "\n${BOLD}=== Step 1b: Public Status Page (Incident Communication) ===${RESET}"
         echo -e "An out-of-band status page can be deployed on a separate domain (e.g. ${CYAN}status.example.com${RESET})"
-        echo -e "served directly by Caddy as static files so it stays online even if the main backend fails."
-        prompt_read "Enter status page domain [optional, press Enter to skip]: " STATUS_DOMAIN ""
+        echo -e "or connected to an existing GitHub Pages site (${CYAN}https://user.github.io/OwnMediaHost-status/${RESET})."
+        local user_status
+        prompt_read "Enter status domain or URL [optional, press Enter to skip]: " user_status ""
+        if [[ "$user_status" =~ ^https?:// ]]; then
+            STATUS_URL="$user_status"
+        elif [[ -n "$user_status" ]]; then
+            STATUS_DOMAIN="$user_status"
+        fi
     fi
 
     # Backend Port
@@ -476,7 +494,9 @@ interactive_wizard() {
         echo -e "  Frontend Domain:  ${CYAN}${FRONTEND_DOMAIN}${RESET}"
         echo -e "  Backend Domain:   ${CYAN}${BACKEND_DOMAIN}${RESET}"
     fi
-    if [[ -n "$STATUS_DOMAIN" ]]; then
+    if [[ -n "$STATUS_URL" ]]; then
+        echo -e "  Status Page:      ${CYAN}${STATUS_URL}${RESET} ${GREEN}(Out-of-band / Connected)${RESET}"
+    elif [[ -n "$STATUS_DOMAIN" ]]; then
         echo -e "  Status Domain:    ${CYAN}${STATUS_DOMAIN}${RESET} ${GREEN}(Decoupled Static Host)${RESET}"
     fi
     echo -e "  Backend Port:     ${CYAN}${BACKEND_PORT}${RESET}"
@@ -787,10 +807,26 @@ setup_status_page() {
     local status_target="/var/www/ownmediahost/status"
     as_root mkdir -p "${status_target}"
 
-    if [ -d "${REPO_DIR}/status" ]; then
+    if [ -d "${REPO_DIR}/status" ] && [ -f "${REPO_DIR}/status/index.html" ]; then
         as_root cp -rf "${REPO_DIR}/status/"* "${status_target}/"
         as_root chown -R www-data:www-data /var/www/ownmediahost/status 2>/dev/null || true
         log_success "Decoupled status page assets deployed to ${status_target}"
+    elif [ -d "${status_target}/.git" ]; then
+        log_info "Existing status repository detected at ${status_target}. Pulling latest..."
+        (cd "${status_target}" && as_root git pull --ff-only 2>/dev/null || true)
+        as_root chown -R www-data:www-data /var/www/ownmediahost/status 2>/dev/null || true
+        log_success "Status page updated from Git repository"
+    elif have git && [ -n "${STATUS_DOMAIN}" ]; then
+        log_info "Cloning standalone status repository from ${STATUS_REPO_URL}..."
+        as_root git clone "${STATUS_REPO_URL}" "${status_target}" 2>/dev/null || true
+        as_root chown -R www-data:www-data /var/www/ownmediahost/status 2>/dev/null || true
+        log_success "Decoupled status repository cloned to ${status_target}"
+    fi
+
+    # If an external or custom status URL was specified, connect it via connect-status.sh
+    if [ -n "${STATUS_URL}" ] && [ -f "${REPO_DIR}/scripts/connect-status.sh" ]; then
+        log_info "Connecting out-of-band status page (${STATUS_URL})..."
+        as_root bash "${REPO_DIR}/scripts/connect-status.sh" --url "${STATUS_URL}" 2>/dev/null || true
     fi
 }
 
@@ -846,6 +882,13 @@ generate_env_file() {
     if [[ -n "$STATUS_DOMAIN" ]]; then
         allowed_origins="${allowed_origins},https://${STATUS_DOMAIN}"
     fi
+    if [[ -n "$STATUS_URL" ]]; then
+        local status_origin
+        status_origin=$(echo "$STATUS_URL" | sed -E 's|^(https?://[^/]+).*|\1|')
+        if [[ -n "$status_origin" && ",${allowed_origins}," != *",${status_origin},"* ]]; then
+            allowed_origins="${allowed_origins},${status_origin}"
+        fi
+    fi
 
     as_root tee "${env_file}" >/dev/null << EOF
 # OwnMediaHost Production Configuration — Auto-generated by VPS Deploy Bot
@@ -863,6 +906,7 @@ DOMAIN=${DOMAIN:-}
 FRONTEND_DOMAIN=${FRONTEND_DOMAIN:-}
 BACKEND_DOMAIN=${BACKEND_DOMAIN:-}
 STATUS_DOMAIN=${STATUS_DOMAIN:-}
+STATUS_PAGE_URL=${STATUS_URL:-}
 
 # Cryptographic Keys (Auto-generated high-entropy secrets)
 JWT_SECRET=${jwt_sec}
@@ -1118,7 +1162,9 @@ print_summary() {
     echo -e "  ${BOLD}Dashboard URL:${RESET}      ${CYAN}${target_url}${RESET}"
     echo -e "  ${BOLD}API Endpoint:${RESET}       ${CYAN}${api_url}${RESET}"
     echo -e "  ${BOLD}API Documentation:${RESET}  ${CYAN}${target_url}/docs${RESET}"
-    if [[ -n "$STATUS_DOMAIN" ]]; then
+    if [[ -n "$STATUS_URL" ]]; then
+        echo -e "  ${BOLD}Status Page:${RESET}        ${CYAN}${STATUS_URL}${RESET} ${GREEN}(Out-of-band / Connected)${RESET}"
+    elif [[ -n "$STATUS_DOMAIN" ]]; then
         echo -e "  ${BOLD}Status Page:${RESET}        ${CYAN}https://${STATUS_DOMAIN}${RESET} ${GREEN}(Decoupled / Out-of-band)${RESET}"
     fi
     echo ""

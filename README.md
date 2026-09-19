@@ -69,6 +69,18 @@ sudo nano /etc/ownmediahost/ownmediahost.env
 sqlite3 /var/lib/ownmediahost/storage/database/media.db
 ```
 
+### 🌐 Incident Communication & Status Page
+
+**Connect public status page (1-Click)**
+```bash
+sudo bash /opt/ownmediahost/scripts/connect-status.sh "https://nourddinak.github.io/OwnMediaHost-status/"
+```
+
+**Test live telemetry & CORS connectivity**
+```bash
+sudo bash /opt/ownmediahost/scripts/connect-status.sh --test
+```
+
 ### 💾 Backup & Disaster Recovery
 
 **Create atomic backup**
@@ -92,7 +104,7 @@ OwnMediaHost gives you a dedicated bare-metal alternative to Cloudinary, ImageKi
 
 - **Your VPS & Pure Bare-Metal Performance**: Runs natively on your server with direct disk I/O, SIMD image acceleration, and native systemd management.
 - **Permanent Clean URLs**: Clean permanent links (`/f/7fd92abc/photo.jpg`) and stable vanity aliases (`/a/profile/avatar`).
-- **Decoupled Incident Communication & Status Page**: Out-of-band public status dashboard (`/status` or `status.domain.com`) that stays online even during primary backend downtime, with live health probing and real-time incident feeds.
+- **Decoupled Incident Communication & Status Page**: Out-of-band public status platform ([OwnMediaHost-status](https://github.com/nourddinak/OwnMediaHost-status) / [Live Demo](https://nourddinak.github.io/OwnMediaHost-status/)) that survives primary backend outages with zero-dependency client health probing, synthetic telemetry, and real-time incident feeds.
 - **Browser-Native Canvas & Video Thumbnails**: Ultra-fast video frame and image thumbnail generation directly in the browser using HTML5 `<canvas>` and `<video>` elements—eliminating server-side CPU spikes and heavy external dependencies.
 - **Pure Rust Image Processing**: High-speed, SIMD-accelerated image scaling and format handling via native Rust libraries with zero external command-line utilities.
 - **Streaming Media Uploads & Format Whitelisting**: High-throughput streaming multipart uploads with zero disk buffering and no orphan chunks, backed by configurable image and video format whitelists (`ALLOWED_IMAGE_FORMATS`, `ALLOWED_VIDEO_FORMATS`).
@@ -238,6 +250,65 @@ sudo grep -s -E "^ADMIN_(EMAIL|PASSWORD)=" /etc/ownmediahost/ownmediahost.env /o
 **Reset administrator password**
 ```bash
 sudo bash /opt/ownmediahost/scripts/reset-password.sh "MyNewSecurePassword2026!"
+```
+
+### 🌐 Public Status Page & Out-of-Band Incident Monitoring
+
+To prevent downtime from becoming a trust crisis, OwnMediaHost features a fully decoupled, out-of-band status page platform ([OwnMediaHost-status](https://github.com/nourddinak/OwnMediaHost-status)).
+
+Hosting a status page on the same server as your application is an anti-pattern: when your app server or database crashes, your status page crashes with it. By deploying your status page to **GitHub Pages' global CDN**, your status monitoring remains 100% online even during complete server blackouts.
+
+```text
+┌────────────────────────────────────────┐       ┌────────────────────────────────────────┐
+│  Decoupled Status Page (GitHub Pages)  │       │    Primary OwnMediaHost Application    │
+│  https://<user>.github.io/status       │       │    https://media.yourdomain.com        │
+│                                        │       │                                        │
+│  • Pure static HTML5 / CSS / Vanilla JS│       │  • Rust Axum Native Engine             │
+│  • 100% Free global CDN hosting        │       │  • SQLite WAL Database                 │
+│  • Survives VPS & network outages      │       │  • Reverse Proxy (Caddy / Auto-HTTPS)  │
+└───────────────────┬────────────────────┘       └───────────────────┬────────────────────┘
+                    │                                                │
+                    │      Client Browser Probes GET /health         │
+                    └───────────────────────────────────────────────►│
+```
+
+#### 1. Fork & Deploy the Status Repository (60 Seconds)
+
+1. Fork or use the template: [github.com/nourddinak/OwnMediaHost-status](https://github.com/nourddinak/OwnMediaHost-status).
+2. Go to **Settings** → **Pages** → under **Source**, select **GitHub Actions**.
+3. Trigger the preconfigured workflow under the **Actions** tab.
+4. Your public status page is now live at `https://<your-username>.github.io/OwnMediaHost-status/` (or your custom domain like `status.example.com`).
+
+#### 2. Connect Your Backend to the Status Page
+
+Run the automated connection utility on your server:
+
+```bash
+# Interactive mode (prompts for your status page URL):
+sudo bash /opt/ownmediahost/scripts/connect-status.sh
+
+# Direct 1-line connection:
+sudo bash /opt/ownmediahost/scripts/connect-status.sh "https://nourddinak.github.io/OwnMediaHost-status/"
+
+# Or pass via flag:
+sudo bash /opt/ownmediahost/scripts/connect-status.sh --url "https://status.yourdomain.com"
+```
+
+The script automatically:
+- Whitelists the status page domain in `ALLOWED_ORIGINS` for cross-origin browser probes.
+- Saves `STATUS_PAGE_URL` in `/etc/ownmediahost/ownmediahost.env`.
+- Synchronizes the status URL into the platform SQLite `settings` table.
+- Restarts the backend service to apply CORS policies.
+- Validates the live `/health` telemetry endpoint and performs a synthetic CORS preflight test.
+
+#### 3. Test & Manage Connection
+
+```bash
+# Verify live telemetry & CORS probe response:
+sudo bash /opt/ownmediahost/scripts/connect-status.sh --test
+
+# Disconnect / unlink public status page:
+sudo bash /opt/ownmediahost/scripts/connect-status.sh --disconnect
 ```
 
 ### Complete Platform Uninstallation

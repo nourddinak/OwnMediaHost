@@ -104,25 +104,76 @@ All API responses follow a consistent envelope format:
 
 ## Endpoints
 
-### System
+### System & Telemetry Endpoints
+
+Health endpoints do not require authentication and are accessible directly by external monitoring services, load balancers, and decoupled public status pages (such as [OwnMediaHost-status](https://github.com/nourddinak/OwnMediaHost-status)). All health endpoints automatically set `Access-Control-Allow-Origin: *` to allow seamless client-side browser probing.
 
 #### `GET /health`
-Health check endpoint for uptime monitoring and load balancer probes.
+Comprehensive system telemetry endpoint. Runs a live database probe, measures database query latency, calculates process uptime, and retrieves host disk capacity.
 
 ```bash
 curl https://api.example.com/health
 ```
 
-Response:
+Response (`200 OK`):
 ```json
-{ "success": true, "data": "OwnMediaHost is healthy" }
+{
+  "status": "operational",
+  "version": "0.1.0",
+  "app_env": "production",
+  "uptime_seconds": 86420,
+  "database": {
+    "status": "connected",
+    "query_latency_ms": 0.42,
+    "total_media_count": 1284,
+    "total_media_bytes": 15829374020
+  },
+  "storage": {
+    "total_disk_bytes": 512000000000,
+    "available_disk_bytes": 420000000000
+  }
+}
 ```
 
+Telemetry Fields:
+| Field | Type | Description |
+|---|---|---|
+| `status` | string | `"operational"` when database responds; `"degraded"` if query fails |
+| `version` | string | Installed platform semantic version (e.g. `"0.1.0"`) |
+| `app_env` | string | Runtime environment (`"production"` or `"development"`) |
+| `uptime_seconds` | integer | Continuous process runtime in seconds |
+| `database.status` | string | SQLite connection status (`"connected"` or `"error"`) |
+| `database.query_latency_ms` | float | Execution time of `SELECT 1` probe in milliseconds |
+| `database.total_media_count` | integer | Number of active (non-deleted) media files in catalog |
+| `database.total_media_bytes` | integer | Total file size in bytes stored on disk |
+| `storage.total_disk_bytes` | integer | Total storage capacity of primary disk partition |
+| `storage.available_disk_bytes` | integer | Free available space in bytes on primary disk partition |
+
 #### `GET /health/ready`
-Readiness probe. Returns 200 only when the database is reachable.
+Readiness probe for reverse proxies (Caddy, Nginx) and orchestrators. Returns `200 OK` only when the SQLite database is healthy and ready to accept queries; otherwise returns `500 Internal Server Error`.
 
 ```bash
 curl https://api.example.com/health/ready
+```
+
+Response (`200 OK`):
+```json
+{
+  "success": true,
+  "data": "ready"
+}
+```
+
+#### `GET /health/live`
+Sub-millisecond liveness probe. Instantly returns HTTP `200 OK` with raw text `"live"` to confirm process liveness without performing database or I/O operations.
+
+```bash
+curl https://api.example.com/health/live
+```
+
+Response (`200 OK`):
+```text
+live
 ```
 
 #### `GET /api/v1`
