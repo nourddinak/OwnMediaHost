@@ -42,6 +42,14 @@ export const MediaPage: React.FC<MediaPageProps> = ({
       });
       setMediaList(res.items);
       setTotal(res.total);
+
+      // Sync the detail drawer with fresh data so changes (visibility, tags, etc.)
+      // appear immediately without requiring a page refresh
+      setActiveMedia((prev) => {
+        if (!prev) return null;
+        const updated = res.items.find((item: MediaItem) => item.id === prev.id);
+        return updated || null;
+      });
     } catch (err: any) {
       toast(err.message || 'Failed to fetch media', 'error');
     } finally {
