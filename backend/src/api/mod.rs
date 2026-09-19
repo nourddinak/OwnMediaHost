@@ -61,7 +61,7 @@ pub fn create_router(
         // Root status endpoints
         .route("/", get(api_root))
         .route("/api", get(api_root))
-        .route("/api/v1", get(api_v1_root))
+        .route("/api/v1/", get(api_v1_root))
         // Health endpoints
         .route("/health", get(health_check))
         .route("/health/live", get(health_live))
@@ -277,4 +277,80 @@ async fn openapi_spec() -> impl IntoResponse {
             }
         }
     }))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::body::Body;
+    use axum::http::{Request, StatusCode};
+    use sqlx::sqlite::SqlitePoolOptions;
+    use std::path::PathBuf;
+    use tower::ServiceExt;
+
+    #[tokio::test]
+    async fn test_routes_exist() {
+        let pool = SqlitePoolOptions::new()
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+
+        // Run migrations
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS api_logs (
+                id TEXT PRIMARY KEY,
+                request_id TEXT NOT NULL,
+                method TEXT NOT NULL,
+                path TEXT NOT NULL,
+                status_code INTEGER NOT NULL,
+                latency_ms REAL NOT NULL,
+                created_at TEXT NOT NULL
+            );",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let storage_dir = tempfile::tempdir().unwrap();
+        let storage = LocalStorageProvider::new(storage_dir.path().to_path_buf()).unwrap();
+        let config = Arc::new(AppConfig {
+            app_env: "test".to_string(),
+            host: "127.0.0.1".to_string(),
+            port: 5002,
+            database_url: "sqlite::memory:".to_string(),
+            media_root: PathBuf::from("./target/test_storage"),
+            public_base_url: "http://localhost:5002".to_string(),
+            max_image_size: 10_000_000,
+            max_video_size: 10_000_000,
+            allowed_image_formats: vec!["jpeg".to_string(), "png".to_string()],
+            allowed_video_formats: vec!["mp4".to_string()],
+            cookie_secret: "test_secret_32_bytes_long_123456".to_string(),
+            api_key_pepper: "test_pepper_32_bytes_long_123456".to_string(),
+            private_url_signing_key: "test_key_32_bytes_long_123456789".to_string(),
+            admin_email: "admin@test.com".to_string(),
+            admin_password: "testpassword123".to_string(),
+            allowed_origins: vec!["*".to_string()],
+            ffmpeg_path: "".to_string(),
+            ffprobe_path: "".to_string(),
+        });
+
+        let app = create_router(pool, storage, config);
+
+        let endpoints = vec!["/", "/api", "/api/v1", "/api/v1/", "/health"];
+        for path in endpoints {
+            let req = Request::builder()
+                .uri(path)
+                .method("GET")
+                .body(Body::empty())
+                .unwrap();
+
+            let response = app.clone().oneshot(req).await.unwrap();
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "Failed on path: {}",
+                path
+            );
+        }
+    }
 }

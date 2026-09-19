@@ -58,9 +58,23 @@ fi
 TARGET_INSTALL_DIR="/opt/ownmediahost"
 REPO_DIR="${TARGET_INSTALL_DIR}"
 
-if [ -n "${1:-}" ] && [ -d "$1" ]; then
-    REPO_DIR="$1"
-elif [ -n "${BASH_SOURCE[0]:-}" ] && [[ "${BASH_SOURCE[0]}" != *"/fd/"* ]] && [ -f "${BASH_SOURCE[0]}" ]; then
+BUILD_FROM_SOURCE=false
+for arg in "$@"; do
+    case "$arg" in
+        --build-from-source|-b)
+            BUILD_FROM_SOURCE=true
+            ;;
+        -*)
+            ;;
+        *)
+            if [ -d "$arg" ]; then
+                REPO_DIR="$arg"
+            fi
+            ;;
+    esac
+done
+
+if [ -n "${BASH_SOURCE[0]:-}" ] && [[ "${BASH_SOURCE[0]}" != *"/fd/"* ]] && [ -f "${BASH_SOURCE[0]}" ]; then
     CURRENT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     if [ -f "${CURRENT_SCRIPT_DIR}/../backend/Cargo.toml" ]; then
         REPO_DIR="$(cd "${CURRENT_SCRIPT_DIR}/.." && pwd)"
@@ -129,7 +143,7 @@ release_backend_url="https://github.com/nourddinak/OwnMediaHost/releases/latest/
 tmp_tar="/tmp/ownmediahost-backend-linux-amd64.tar.gz"
 as_root rm -f "$tmp_tar"
 
-if curl -fsSL -o "$tmp_tar" "$release_backend_url" 2>/dev/null && [ -s "$tmp_tar" ]; then
+if [[ "$BUILD_FROM_SOURCE" != true ]] && curl -fsSL -o "$tmp_tar" "$release_backend_url" 2>/dev/null && [ -s "$tmp_tar" ]; then
     tmp_extract="/tmp/ownmediahost-bin-extract"
     as_root rm -rf "$tmp_extract"
     as_root mkdir -p "$tmp_extract"
@@ -142,7 +156,11 @@ if curl -fsSL -o "$tmp_tar" "$release_backend_url" 2>/dev/null && [ -s "$tmp_tar
 fi
 
 if [[ "$binary_updated" != true ]]; then
-    log_info "Precompiled backend not reachable. Compiling from source..."
+    if [[ "$BUILD_FROM_SOURCE" == true ]]; then
+        log_info "Building backend from source as requested..."
+    else
+        log_info "Precompiled backend not reachable or outdated. Compiling from source..."
+    fi
     CARGO_ENV=""
     for candidate in \
         "/root/.cargo/env" \
