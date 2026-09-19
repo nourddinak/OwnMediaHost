@@ -87,26 +87,31 @@
             </div>
           </div>
 
-          <!-- Hero Metrics Strip -->
+          <!-- Hero Metrics Strip (100% Real Production Telemetry) -->
           <div class="hero-metrics-strip">
             <div class="metric-cell">
               <span class="metric-title">System Health</span>
               <span class="metric-stat highlight-green" id="stat-health">100.0%</span>
             </div>
-            <div class="metric-divider"></div>
             <div class="metric-cell">
-              <span class="metric-title">Round-Trip Latency</span>
-              <span class="metric-stat" id="stat-latency">-- ms</span>
+              <span class="metric-title">Network Latency</span>
+              <span class="metric-stat font-mono" id="stat-latency">-- ms</span>
             </div>
-            <div class="metric-divider"></div>
             <div class="metric-cell">
-              <span class="metric-title">Last Inspected</span>
-              <span class="metric-stat font-mono" id="stat-last-check">Checking...</span>
+              <span class="metric-title">DB Query Latency</span>
+              <span class="metric-stat font-mono" id="stat-db-latency">-- ms</span>
             </div>
-            <div class="metric-divider"></div>
+            <div class="metric-cell">
+              <span class="metric-title">Process Uptime</span>
+              <span class="metric-stat font-mono" id="stat-uptime">--</span>
+            </div>
+            <div class="metric-cell">
+              <span class="metric-title">Media Storage</span>
+              <span class="metric-stat font-mono" id="stat-media">--</span>
+            </div>
             <div class="metric-cell">
               <span class="metric-title">Active Outages</span>
-              <span class="metric-stat" id="stat-active-incidents">0</span>
+              <span class="metric-stat font-mono" id="stat-active-incidents">0</span>
             </div>
           </div>
         </div>
@@ -154,7 +159,7 @@
                 </div>
                 <div>
                   <h3 class="component-name">Web Dashboard &amp; SPA</h3>
-                  <span class="component-sub">Client UI, Static Assets, and Edge Routing</span>
+                  <span class="component-sub" id="sub-web">Client UI, Static Assets, and Edge Routing</span>
                 </div>
               </div>
               <div class="component-status-pill status-operational" id="pill-web">
@@ -187,7 +192,7 @@
                 </div>
                 <div>
                   <h3 class="component-name">API Gateway &amp; Upload Engine</h3>
-                  <span class="component-sub">Axum Core Router, Multipart Streaming, and Auth</span>
+                  <span class="component-sub" id="sub-api">Axum Core Router, Multipart Streaming, and Auth</span>
                 </div>
               </div>
               <div class="component-status-pill status-operational" id="pill-api">
@@ -201,7 +206,7 @@
               <div class="uptime-ticks" id="ticks-api"></div>
               <div class="uptime-footer">
                 <span class="uptime-legend">60 days ago</span>
-                <span class="uptime-percent" id="pct-api">99.98% uptime</span>
+                <span class="uptime-percent" id="pct-api">100.0% uptime</span>
                 <span class="uptime-legend">Today</span>
               </div>
             </div>
@@ -219,7 +224,7 @@
                 </div>
                 <div>
                   <h3 class="component-name">Media Streaming &amp; Processing</h3>
-                  <span class="component-sub">Range-Request Streaming, Dynamic Canvas &amp; SIMD</span>
+                  <span class="component-sub" id="sub-media">Range-Request Streaming, Dynamic Canvas &amp; SIMD</span>
                 </div>
               </div>
               <div class="component-status-pill status-operational" id="pill-media">
@@ -252,7 +257,7 @@
                 </div>
                 <div>
                   <h3 class="component-name">Database &amp; Storage Engine</h3>
-                  <span class="component-sub">SQLite WAL Engine &amp; Media Disk Volumes</span>
+                  <span class="component-sub" id="sub-db">SQLite WAL Engine &amp; Media Disk Volumes</span>
                 </div>
               </div>
               <div class="component-status-pill status-operational" id="pill-db">
@@ -283,8 +288,8 @@
               <p class="section-desc">Latency measurements across recent synthetic probes.</p>
             </div>
             <div class="latency-stats-row">
-              <div class="stat-pill"><span class="stat-lbl">P50</span> <span class="stat-val font-mono" id="chart-p50">18ms</span></div>
-              <div class="stat-pill"><span class="stat-lbl">P95</span> <span class="stat-val font-mono" id="chart-p95">36ms</span></div>
+              <div class="stat-pill"><span class="stat-lbl">P50</span> <span class="stat-val font-mono" id="chart-p50">-- ms</span></div>
+              <div class="stat-pill"><span class="stat-lbl">P95</span> <span class="stat-val font-mono" id="chart-p95">-- ms</span></div>
               <div class="stat-pill"><span class="stat-lbl">Current</span> <span class="stat-val font-mono highlight-green" id="chart-curr">-- ms</span></div>
             </div>
           </div>
@@ -293,17 +298,17 @@
             <svg class="latency-svg" id="latency-svg" viewBox="0 0 800 120" preserveAspectRatio="none">
               <defs>
                 <linearGradient id="latencyGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stop-color="#6366f1" stop-opacity="0.35"/>
-                  <stop offset="100%" stop-color="#6366f1" stop-opacity="0.0"/>
+                  <stop offset="0%" stop-color="#388bfd" stop-opacity="0.25"/>
+                  <stop offset="100%" stop-color="#388bfd" stop-opacity="0.0"/>
                 </linearGradient>
               </defs>
               <path id="chart-area" d="" fill="url(#latencyGrad)"></path>
-              <path id="chart-line" d="" fill="none" stroke="#818cf8" stroke-width="2.5" stroke-linecap="round"></path>
+              <path id="chart-line" d="" fill="none" stroke="#388bfd" stroke-width="2" stroke-linecap="round"></path>
             </svg>
             <div class="chart-axis-labels">
-              <span>30 probes ago</span>
-              <span>15 probes ago</span>
-              <span>Latest probe</span>
+              <span id="chart-axis-start">Oldest probe</span>
+              <span id="chart-axis-mid">Recorded probe samples</span>
+              <span id="chart-axis-end">Latest probe</span>
             </div>
           </div>
         </div>

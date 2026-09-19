@@ -8,7 +8,7 @@
   </mask>
   <g mask="url(#a)">
     <path fill="#1e293b" d="M0 0h96v20H0z"/>
-    <path fill="#10b981" d="M96 0h72v20H96z"/>
+    <path fill="#2ea043" d="M96 0h72v20H96z"/>
     <path fill="url(#b)" d="M0 0h168v20H0z"/>
   </g>
   <g fill="#fff" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,sans-serif" text-rendering="geometricPrecision" font-size="110">

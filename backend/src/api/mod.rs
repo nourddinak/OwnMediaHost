@@ -31,6 +31,8 @@ use crate::{
 #[derive(Clone)]
 pub struct AppState {
     pub pool: DbPool,
+    pub config: Arc<AppConfig>,
+    pub start_time: std::time::Instant,
 }
 
 pub fn create_router(
@@ -40,6 +42,8 @@ pub fn create_router(
 ) -> Router {
     let state = AppState {
         pool: pool.clone(),
+        config: config.clone(),
+        start_time: std::time::Instant::now(),
     };
 
     let settings_cache = settings::SettingsCache::new();
@@ -65,7 +69,10 @@ pub fn create_router(
         .route("/api", get(api_root))
         .route("/api/v1/", get(api_v1_root))
         // Health endpoints
-        .route("/health", get(health_check))
+        .route("/health", get({
+            let state_clone = state.clone();
+            move || health_check(state_clone)
+        }))
         .route("/health/live", get(health_live))
         .route("/health/ready", get({
             let state_clone = state.clone();
@@ -112,10 +119,45 @@ async fn api_v1_root() -> impl IntoResponse {
     }))
 }
 
-async fn health_check() -> impl IntoResponse {
+async fn health_check(state: AppState) -> impl IntoResponse {
+    let query_start = std::time::Instant::now();
+    let db_ok = sqlx::query("SELECT 1").execute(&state.pool).await.is_ok();
+    let db_latency_ms = (query_start.elapsed().as_micros() as f64) / 1000.0;
+
+    let media_count: (i64, i64) = sqlx::query_as(
+        "SELECT COUNT(*), COALESCE(SUM(file_size), 0) FROM media WHERE deleted_at IS NULL"
+    )
+    .fetch_one(&state.pool)
+    .await
+    .unwrap_or((0, 0));
+
+    let uptime_secs = state.start_time.elapsed().as_secs();
+
+    let disks = sysinfo::Disks::new_with_refreshed_list();
+    let (disk_total, disk_available) = if let Some(disk) = disks.list().first() {
+        (disk.total_space(), disk.available_space())
+    } else {
+        (0, 0)
+    };
+
     (
         [(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")],
-        Json(ApiResponse::ok("OwnMediaHost is healthy")),
+        Json(serde_json::json!({
+            "status": if db_ok { "operational" } else { "degraded" },
+            "version": env!("CARGO_PKG_VERSION"),
+            "app_env": state.config.app_env,
+            "uptime_seconds": uptime_secs,
+            "database": {
+                "status": if db_ok { "connected" } else { "error" },
+                "query_latency_ms": db_latency_ms,
+                "total_media_count": media_count.0,
+                "total_media_bytes": media_count.1
+            },
+            "storage": {
+                "total_disk_bytes": disk_total,
+                "available_disk_bytes": disk_available
+            }
+        })),
     )
 }
 
