@@ -237,24 +237,6 @@ curl -X POST {BASE_URL}/api/v1/files \\
   "data": "File permanently deleted"
 }`,
   },
-  {
-    id: 'replace-content',
-    method: 'PUT',
-    path: '/api/v1/files/{id}/content',
-    title: 'Replace File Content',
-    description: 'Replace the actual file content of an existing media item while preserving its ID, public ID, aliases, and metadata.',
-    category: 'Media',
-    auth: true,
-    permission: 'files:write',
-    params: [
-      { name: 'id', in: 'path', type: 'string', required: true, description: 'File UUID or public ID' },
-      { name: 'file', in: 'body', type: 'file', required: true, description: 'Replacement file (multipart)' },
-    ],
-    responseExample: `{
-  "success": true,
-  "data": { "id": "f_abc123", "filename": "updated.jpg", "..." : "..." }
-}`,
-  },
   // Folders
   {
     id: 'list-folders',

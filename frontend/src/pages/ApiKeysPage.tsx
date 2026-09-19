@@ -22,7 +22,7 @@ export const ApiKeysPage: React.FC = () => {
 
   const availablePermissions = [
     { id: 'files:read', label: 'files:read (View & search media)' },
-    { id: 'files:write', label: 'files:write (Upload & replace media)' },
+    { id: 'files:write', label: 'files:write (Upload & update media)' },
     { id: 'files:delete', label: 'files:delete (Delete media)' },
     { id: 'folders:read', label: 'folders:read (List folders)' },
     { id: 'folders:write', label: 'folders:write (Create/delete folders)' },
