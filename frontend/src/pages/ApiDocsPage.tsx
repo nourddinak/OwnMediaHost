@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
 
 interface EndpointDef {
   id: string;
@@ -651,7 +650,8 @@ export const ApiDocsPage: React.FC = () => {
     setLiveResponse(null);
     const start = performance.now();
     try {
-      const url = `${baseUrl}${ep.path}`;
+      // Use relative path so the request goes through the Vite proxy (dev) or same-origin (prod)
+      const url = ep.path;
       const headers: Record<string, string> = {};
       if (ep.auth && apiKey) {
         headers['X-API-Key'] = apiKey;
