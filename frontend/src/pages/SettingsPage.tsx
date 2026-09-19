@@ -169,6 +169,49 @@ export const SettingsPage: React.FC = () => {
           />
         </div>
 
+        {/* Public Status Page (Out-of-Band / GitHub Pages) */}
+        <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+            <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
+              Public Out-of-Band Status Page URL
+            </label>
+            <a
+              href={settings['status_page_url'] || '/status/'}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                fontSize: '12px',
+                color: 'var(--color-primary, #6366f1)',
+                textDecoration: 'none',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+            >
+              Open Status Dashboard ↗
+            </a>
+          </div>
+          <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', lineHeight: 1.5 }}>
+            Link to your public status page (e.g. deployed to GitHub Pages at <code>https://username.github.io/OwnMediaHost/</code> or a custom domain like <code>https://status.example.com</code>).
+          </span>
+          <input
+            type="text"
+            value={settings['status_page_url'] || ''}
+            onChange={(e) => handleChange('status_page_url', e.target.value)}
+            placeholder="https://yourname.github.io/OwnMediaHost/ or https://status.yourdomain.com"
+            style={{
+              width: '100%',
+              background: 'var(--bg-tertiary)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '6px',
+              padding: '8px 12px',
+              color: '#fff',
+              fontSize: '13px',
+              marginTop: '6px',
+            }}
+          />
+        </div>
+
         <button
           onClick={handleSave}
           disabled={saving}

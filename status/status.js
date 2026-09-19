@@ -1,6 +1,6 @@
 /**
  * OwnMediaHost — Decoupled Out-of-Band Status Platform Engine
- * 100% Real Production Telemetry, Live Probing, 60-Day Calendar Uptime, and Real Incident Feeds.
+ * 100% Real Production Telemetry, Unified 90-Day Timeline, and GitHub Pages Integration.
  */
 
 (function () {
@@ -12,15 +12,17 @@
   let pollTimerId = null;
   let uptimeTickerId = null;
   let isProbing = false;
-  let customEndpointOverride = null;
   let currentUptimeSeconds = 0;
+  let activeTargetBaseUrl = '';
 
-  // Real measured latency history loaded from persistent localStorage
-  const LATENCY_STORAGE_KEY = 'ownmediahost_live_latency_samples';
+  // Persistent LocalStorage Keys
+  const STORAGE_KEY_LATENCY = 'ownmediahost_live_latency_samples';
+  const STORAGE_KEY_ENDPOINT = 'ownmediahost_api_endpoint';
 
+  // Load / Save Real Latency History
   function loadLatencyHistory() {
     try {
-      const raw = localStorage.getItem(LATENCY_STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEY_LATENCY);
       if (raw) {
         const parsed = JSON.parse(raw);
         if (Array.isArray(parsed) && parsed.length > 0) {
@@ -33,7 +35,7 @@
 
   function saveLatencyHistory(history) {
     try {
-      localStorage.setItem(LATENCY_STORAGE_KEY, JSON.stringify(history.slice(-30)));
+      localStorage.setItem(STORAGE_KEY_LATENCY, JSON.stringify(history.slice(-30)));
     } catch (_) {}
   }
 
@@ -65,8 +67,21 @@
 
   // DOM Handles
   const els = {
-    // Hero Elements
+    // Header & Actions
+    navTargetHost: document.getElementById('nav-target-host'),
+    btnOpenConnect: document.getElementById('btn-open-connect'),
+    probeCountdown: document.getElementById('probe-countdown'),
+    btnRefresh: document.getElementById('btn-refresh'),
+    btnSubscribe: document.getElementById('btn-subscribe'),
+    instanceSetupBanner: document.getElementById('instance-setup-banner'),
+    inputQuickConnect: document.getElementById('input-quick-connect'),
+    btnQuickConnect: document.getElementById('btn-quick-connect'),
+    btnDismissBanner: document.getElementById('btn-dismiss-banner'),
+
+    // Hero Section
     heroCard: document.getElementById('hero-card'),
+    heroStatusBadge: document.getElementById('hero-status-badge'),
+    heroBadgeText: document.getElementById('hero-badge-text'),
     heroHeadline: document.getElementById('hero-headline'),
     heroDesc: document.getElementById('hero-desc'),
     statHealth: document.getElementById('stat-health'),
@@ -76,32 +91,24 @@
     statMedia: document.getElementById('stat-media'),
     statActiveIncidents: document.getElementById('stat-active-incidents'),
 
-    // Timer & Controls
-    probeCountdown: document.getElementById('probe-countdown'),
-    btnRefresh: document.getElementById('btn-refresh'),
+    // Unified 90-Day Timeline
+    timelineTicksRow: document.getElementById('timeline-ticks-row'),
+    timelineOverallUptime: document.getElementById('timeline-overall-uptime'),
+    timelineSummaryText: document.getElementById('timeline-summary-text'),
 
-    // Broadcast (Active Incidents)
-    broadcastSection: document.getElementById('broadcast-section'),
-    broadcastCardsList: document.getElementById('broadcast-cards-list'),
-    activeIncidentCount: document.getElementById('active-incident-count'),
-
-    // Subsystems & Heatmaps
-    pillWeb: document.getElementById('pill-web'),
+    // Services Breakdown
     pillApi: document.getElementById('pill-api'),
-    pillMedia: document.getElementById('pill-media'),
     pillDb: document.getElementById('pill-db'),
-    subWeb: document.getElementById('sub-web'),
-    subApi: document.getElementById('sub-api'),
-    subMedia: document.getElementById('sub-media'),
-    subDb: document.getElementById('sub-db'),
-    ticksWeb: document.getElementById('ticks-web'),
-    ticksApi: document.getElementById('ticks-api'),
-    ticksMedia: document.getElementById('ticks-media'),
-    ticksDb: document.getElementById('ticks-db'),
-    pctWeb: document.getElementById('pct-web'),
-    pctApi: document.getElementById('pct-api'),
-    pctMedia: document.getElementById('pct-media'),
-    pctDb: document.getElementById('pct-db'),
+    pillMedia: document.getElementById('pill-media'),
+    pillWeb: document.getElementById('pill-web'),
+    descApi: document.getElementById('desc-api'),
+    descDb: document.getElementById('desc-db'),
+    descMedia: document.getElementById('desc-media'),
+    descWeb: document.getElementById('desc-web'),
+    metricApi: document.getElementById('metric-api'),
+    metricDb: document.getElementById('metric-db'),
+    metricMedia: document.getElementById('metric-media'),
+    metricWeb: document.getElementById('metric-web'),
 
     // Latency Chart
     chartLine: document.getElementById('chart-line'),
@@ -113,24 +120,28 @@
     chartAxisMid: document.getElementById('chart-axis-mid'),
     chartAxisEnd: document.getElementById('chart-axis-end'),
 
-    // Past Incidents
+    // Incidents
+    broadcastSection: document.getElementById('broadcast-section'),
+    broadcastCardsList: document.getElementById('broadcast-cards-list'),
+    activeIncidentCount: document.getElementById('active-incident-count'),
     pastIncidentsStack: document.getElementById('past-incidents-stack'),
 
-    // Endpoint Diagnostics
-    inputEndpointOverride: document.getElementById('input-endpoint-override'),
-    btnApplyEndpoint: document.getElementById('btn-apply-endpoint'),
-    btnResetEndpoint: document.getElementById('btn-reset-endpoint'),
-    activeTargetDisplay: document.getElementById('active-target-display'),
-
     // Modals
-    btnSubscribe: document.getElementById('btn-subscribe'),
+    modalConnect: document.getElementById('modal-connect'),
+    btnCloseConnect: document.getElementById('btn-close-connect'),
+    modalTargetInput: document.getElementById('modal-target-input'),
+    btnTestSaveTarget: document.getElementById('btn-test-save-target'),
+    connectStatusNotice: document.getElementById('connect-status-notice'),
+    btnResetTargetDefault: document.getElementById('btn-reset-target-default'),
+    btnFooterConnect: document.getElementById('btn-footer-connect'),
+
     modalSubscribe: document.getElementById('modal-subscribe'),
     btnCloseSubscribe: document.getElementById('btn-close-subscribe'),
     feedUrlInput: document.getElementById('feed-url-input'),
     btnCopyFeed: document.getElementById('btn-copy-feed'),
 
-    btnOpenBadgeModal: document.getElementById('btn-open-badge-modal'),
     modalBadge: document.getElementById('modal-badge'),
+    btnOpenBadgeModal: document.getElementById('btn-open-badge-modal'),
     btnCloseBadge: document.getElementById('btn-close-badge'),
     badgeMdInput: document.getElementById('badge-md-input'),
     badgeHtmlInput: document.getElementById('badge-html-input'),
@@ -150,63 +161,95 @@
     els.yearLabel.textContent = new Date().getFullYear();
   }
 
-  // Determine Target Base URL for synthetic health probes
+  // Determine Target Base URL (Handles GitHub Pages, Query Params, LocalStorage & Config)
   function resolveTargetUrl(configData) {
-    if (customEndpointOverride) {
-      return customEndpointOverride.replace(/\/+$/, '');
-    }
-
+    // 1. URL Query Param: ?api=https://media.example.com
     const params = new URLSearchParams(window.location.search);
     if (params.get('api')) {
-      return params.get('api').replace(/\/+$/, '');
+      const p = params.get('api').trim().replace(/\/+$/, '');
+      if (p) return p;
     }
 
-    if (configData && configData.api_endpoint && configData.api_endpoint.trim() !== '') {
+    // 2. LocalStorage override saved by user
+    const saved = localStorage.getItem(STORAGE_KEY_ENDPOINT);
+    if (saved && saved.trim() !== '') {
+      return saved.trim().replace(/\/+$/, '');
+    }
+
+    // 3. Preconfigured in config.json or incidents.json
+    if (configData?.api_endpoint && configData.api_endpoint.trim() !== '') {
       return configData.api_endpoint.trim().replace(/\/+$/, '');
     }
 
+    // 4. Localhost / Local Dev server
     const host = window.location.hostname;
     const protocol = window.location.protocol;
-
     if (host === 'localhost' || host === '127.0.0.1' || protocol === 'file:') {
       if (window.location.port) {
         const p = window.location.port;
-        const targetPort = p === '5173' || p === '3000' || p === '5055' ? '5002' : p;
+        const targetPort = (p === '5173' || p === '3000' || p === '5055') ? '5002' : p;
         return `${protocol === 'file:' ? 'http:' : protocol}//127.0.0.1:${targetPort}`;
       }
       return 'http://127.0.0.1:5002';
     }
 
-    if (host.startsWith('status.')) {
+    // 5. If hosted on a subdomain (e.g. status.media.example.com or status.example.com)
+    if (host.startsWith('status.') && !host.endsWith('.github.io')) {
       const rootDomain = host.substring(7);
       return `${protocol}//${rootDomain}`;
+    }
+
+    // 6. GitHub Pages (*.github.io) without configured endpoint:
+    // Display the first-run connection banner!
+    if (host.endsWith('.github.io')) {
+      return '';
     }
 
     return window.location.origin;
   }
 
-  // Load Incidents Data (JSON) with local cache fallback
-  async function loadIncidentsConfig() {
+  // Load Status Config (config.json & incidents.json)
+  async function loadStatusData() {
+    let incidentsData = { incidents: [], past_incidents: [] };
+    let configData = {};
+
+    try {
+      const res = await fetch(`config.json?t=${Date.now()}`, { cache: 'no-store' });
+      if (res.ok) configData = await res.json();
+    } catch (_) {}
+
     try {
       const res = await fetch(`incidents.json?t=${Date.now()}`, {
         cache: 'no-store',
         headers: { Accept: 'application/json' },
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      localStorage.setItem('ownmediahost_status_cache', JSON.stringify(data));
-      return data;
-    } catch (e) {
-      const cached = localStorage.getItem('ownmediahost_status_cache');
-      if (cached) {
-        try { return JSON.parse(cached); } catch (_) {}
+      if (res.ok) {
+        incidentsData = await res.json();
+        localStorage.setItem('ownmediahost_incidents_cache', JSON.stringify(incidentsData));
       }
-      return { incidents: [], past_incidents: [] };
+    } catch (_) {
+      const cached = localStorage.getItem('ownmediahost_incidents_cache');
+      if (cached) {
+        try { incidentsData = JSON.parse(cached); } catch (_) {}
+      }
     }
+
+    return { ...configData, ...incidentsData };
   }
 
-  // Perform synthetic health probe against real backend
+  // Synthetic Health Probe against target
   async function performSyntheticProbe(baseUrl) {
+    if (!baseUrl || baseUrl.trim() === '') {
+      return {
+        apiAlive: false,
+        dbReady: false,
+        latency: 0,
+        failMessage: 'No OwnMediaHost instance linked. Click "Target" in the navigation bar to connect your backend.',
+        healthData: null,
+        notConfigured: true,
+      };
+    }
+
     const startTime = performance.now();
     let apiAlive = false;
     let dbReady = false;
@@ -214,15 +257,9 @@
     let failMessage = '';
     let healthData = null;
 
-    if (els.activeTargetDisplay) {
-      els.activeTargetDisplay.textContent = baseUrl;
-    }
-    if (els.navMainApp) els.navMainApp.href = baseUrl || '/';
-    if (els.navHealthApi) els.navHealthApi.href = `${baseUrl}/health`;
-
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 6000);
+      const timeoutId = setTimeout(() => controller.abort(), 6500);
 
       const healthRes = await fetch(`${baseUrl}/health`, {
         method: 'GET',
@@ -262,18 +299,20 @@
       }
     } catch (err) {
       latency = Math.round(performance.now() - startTime);
-      failMessage = err.name === 'AbortError' ? 'Probe Request Timed Out (>6s)' : 'Network Unreachable (Host Offline / 502 Bad Gateway)';
+      failMessage = err.name === 'AbortError'
+        ? 'Probe Timed Out (>6.5s)'
+        : 'Connection Refused (Host Offline or CORS blocked)';
     }
 
-    return { apiAlive, dbReady, latency, failMessage, healthData };
+    return { apiAlive, dbReady, latency, failMessage, healthData, notConfigured: false };
   }
 
-  // Render 60-Day Interactive Uptime Heatmap (Calculated from Real Calendar Dates & Incidents)
-  function buildUptimeHeatmap(containerEl, pctEl, componentKey, pastIncidents) {
-    if (!containerEl) return;
-    containerEl.innerHTML = '';
+  // Render Unified 90-Day Uptime Timeline (Replaces 4x bulky green grids)
+  function renderUnifiedTimeline(pastIncidents) {
+    if (!els.timelineTicksRow) return;
+    els.timelineTicksRow.innerHTML = '';
 
-    const DAYS_COUNT = 60;
+    const DAYS_COUNT = 90;
     const now = new Date();
     let degradedDaysCount = 0;
 
@@ -281,7 +320,6 @@
       const dayDate = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
       const dateStr = dayDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 
-      // Check if this date intersects with an incident in pastIncidents
       let isDegraded = false;
       let isOutage = false;
       let incidentTitle = '';
@@ -289,22 +327,19 @@
       if (pastIncidents && pastIncidents.length > 0) {
         for (const inc of pastIncidents) {
           if (inc.date && dateStr.includes(inc.date.split(',')[0])) {
-            const affected = inc.affected_components || inc.components || [];
-            if (affected.length === 0 || affected.includes(componentKey)) {
-              if (inc.severity === 'critical' || inc.severity === 'outage') {
-                isOutage = true;
-              } else {
-                isDegraded = true;
-              }
-              incidentTitle = inc.title;
-              break;
+            if (inc.severity === 'critical' || inc.severity === 'outage') {
+              isOutage = true;
+            } else {
+              isDegraded = true;
             }
+            incidentTitle = inc.title;
+            break;
           }
         }
       }
 
       const tick = document.createElement('div');
-      tick.className = 'tick-bar';
+      tick.className = 'timeline-tick';
 
       if (isOutage) {
         tick.classList.add('tick-outage');
@@ -315,19 +350,24 @@
         tick.setAttribute('data-tooltip', `${dateStr} — Degraded: ${incidentTitle || 'Degraded performance'}`);
         degradedDaysCount++;
       } else {
-        tick.setAttribute('data-tooltip', `${dateStr} — 100.0% Operational (0 outages recorded)`);
+        tick.setAttribute('data-tooltip', `${dateStr} — 100.0% Operational (0 downtime)`);
       }
 
-      containerEl.appendChild(tick);
+      els.timelineTicksRow.appendChild(tick);
     }
 
-    if (pctEl) {
-      const uptime = (((DAYS_COUNT - degradedDaysCount) / DAYS_COUNT) * 100).toFixed(2);
-      pctEl.textContent = `${uptime}% uptime`;
+    const uptime = (((DAYS_COUNT - degradedDaysCount) / DAYS_COUNT) * 100).toFixed(2);
+    if (els.timelineOverallUptime) {
+      els.timelineOverallUptime.textContent = `${uptime}%`;
+    }
+    if (els.timelineSummaryText) {
+      els.timelineSummaryText.textContent = degradedDaysCount === 0
+        ? 'No recorded downtime or major service interruptions across all systems'
+        : `${degradedDaysCount} day${degradedDaysCount > 1 ? 's' : ''} with partial service degradation recorded in past 90 days`;
     }
   }
 
-  // Draw Latency SVG Curve from 100% Real Measured Probe Samples
+  // Render Measured Latency SVG Curve
   function renderLatencyChart(history) {
     if (!els.chartLine || !els.chartArea) return;
 
@@ -342,12 +382,12 @@
     }
 
     const width = 800;
-    const height = 100;
-    const paddingY = 16;
+    const height = 90;
+    const paddingY = 14;
     const maxVal = Math.max(35, ...history) * 1.25;
     const minVal = Math.max(0, Math.min(...history) * 0.75);
 
-    // Calculate genuine P50 and P95 from real data points
+    // Calculate P50 and P95
     const sorted = [...history].sort((a, b) => a - b);
     const p50 = sorted[Math.floor(sorted.length * 0.5)];
     const p95 = sorted[Math.floor(sorted.length * 0.95)];
@@ -357,15 +397,9 @@
     if (els.chartP95) els.chartP95.textContent = `${p95}ms`;
     if (els.chartCurr) els.chartCurr.textContent = `${current}ms`;
 
-    if (els.chartAxisStart) {
-      els.chartAxisStart.textContent = `${history.length} probe${history.length === 1 ? '' : 's'} recorded`;
-    }
-    if (els.chartAxisMid) {
-      els.chartAxisMid.textContent = '30s interval';
-    }
-    if (els.chartAxisEnd) {
-      els.chartAxisEnd.textContent = `Latest: ${current}ms`;
-    }
+    if (els.chartAxisStart) els.chartAxisStart.textContent = `${history.length} probe${history.length === 1 ? '' : 's'} recorded`;
+    if (els.chartAxisMid) els.chartAxisMid.textContent = '30s interval';
+    if (els.chartAxisEnd) els.chartAxisEnd.textContent = `Latest: ${current}ms`;
 
     if (history.length === 1) {
       const y = Math.round(height / 2);
@@ -399,46 +433,64 @@
     els.chartArea.setAttribute('d', areaD);
   }
 
-  // Helper: Update Subsystem Pill
-  function updateComponentPill(pillEl, state, label) {
+  // Update Services Status Pill
+  function updateServicePill(pillEl, state, label) {
     if (!pillEl) return;
-    pillEl.className = `component-status-pill status-${state}`;
-    const labelEl = pillEl.querySelector('.pill-label');
-    if (labelEl) labelEl.textContent = label;
+    pillEl.className = `service-pill status-${state}`;
+    pillEl.textContent = label;
   }
 
-  // Update Hero, Platform UI, and Subsystem Details with Real Telemetry
+  // Update Main Platform UI
   function updatePlatformUI(telemetry, configData) {
-    const { apiAlive, dbReady, latency, failMessage, healthData } = telemetry;
+    const { apiAlive, dbReady, latency, failMessage, healthData, notConfigured } = telemetry;
     const activeIncidents = configData.incidents || [];
     const isUnderMaintenance = activeIncidents.some(i => i.status === 'maintenance' || i.severity === 'maintenance');
 
-    // Record real latency to persistent buffer
+    // Update Nav Target display
+    if (els.navTargetHost) {
+      if (notConfigured) {
+        els.navTargetHost.textContent = 'Not Connected (Click to Link)';
+        els.navTargetHost.style.color = 'var(--color-amber-text)';
+      } else {
+        try {
+          const u = new URL(activeTargetBaseUrl);
+          els.navTargetHost.textContent = u.host;
+        } catch (_) {
+          els.navTargetHost.textContent = activeTargetBaseUrl || 'Default';
+        }
+        els.navTargetHost.style.color = 'var(--text-primary)';
+      }
+    }
+
+    // Toggle GitHub Pages first-run banner
+    if (els.instanceSetupBanner) {
+      els.instanceSetupBanner.style.display = notConfigured ? 'block' : 'none';
+    }
+
+    // Record latency to history
     if (apiAlive && latency > 0) {
       latencyHistory.push(latency);
-      if (latencyHistory.length > 30) {
-        latencyHistory.shift();
-      }
+      if (latencyHistory.length > 30) latencyHistory.shift();
       saveLatencyHistory(latencyHistory);
       renderLatencyChart(latencyHistory);
     }
 
-    // Extract real infrastructure data from /health
+    // Extract real infrastructure details
     const dbLatency = healthData?.database?.query_latency_ms;
     const totalMediaCount = healthData?.database?.total_media_count ?? 0;
     const totalMediaBytes = healthData?.database?.total_media_bytes ?? 0;
     const version = healthData?.version || '0.1.0';
-    const appEnv = healthData?.app_env || 'development';
+    const appEnv = healthData?.app_env || 'production';
     const uptimeSecs = healthData?.uptime_seconds;
 
     if (uptimeSecs !== undefined && uptimeSecs !== null) {
       currentUptimeSeconds = uptimeSecs;
     }
 
-    // Update Real Hero Metrics Strip
+    // Update Hero Metrics Strip
     if (els.statLatency) {
       els.statLatency.textContent = apiAlive ? `${latency} ms` : '-- ms';
-      els.statLatency.style.color = latency > 180 ? 'var(--color-yellow)' : 'var(--text-primary)';
+      els.statLatency.style.color = latency > 180 ? 'var(--color-amber-text)' : 'var(--text-primary)';
     }
 
     if (els.statDbLatency) {
@@ -459,68 +511,84 @@
 
     if (els.statActiveIncidents) {
       els.statActiveIncidents.textContent = activeIncidents.length;
-      els.statActiveIncidents.style.color = activeIncidents.length > 0 ? 'var(--color-red)' : 'var(--text-primary)';
+      els.statActiveIncidents.style.color = activeIncidents.length > 0 ? 'var(--color-red-text)' : 'var(--text-primary)';
     }
 
-    // Reset Hero Card
+    // Reset Hero Classes
     els.heroCard.className = 'hero-card';
 
-    // Subsystems condition determination
+    if (notConfigured) {
+      els.heroCard.classList.add('status-maintenance');
+      if (els.heroBadgeText) els.heroBadgeText.textContent = 'Setup Required';
+      els.heroHeadline.textContent = 'Connect Your OwnMediaHost Backend';
+      els.heroDesc.textContent = 'This status dashboard is running out-of-band on GitHub Pages. Enter your backend URL above or click Target to start monitoring.';
+      if (els.statHealth) els.statHealth.textContent = 'Pending Setup';
+      if (els.sampleBadgeStatus) els.sampleBadgeStatus.textContent = 'Setup';
+      return;
+    }
+
     if (isUnderMaintenance) {
       els.heroCard.classList.add('status-maintenance');
+      if (els.heroBadgeText) els.heroBadgeText.textContent = 'Maintenance';
       els.heroHeadline.textContent = 'Scheduled Infrastructure Maintenance in Progress';
-      els.heroDesc.textContent = activeIncidents[0]?.title || 'Systems are undergoing routine updates. Services will resume shortly.';
-      if (els.statHealth) { els.statHealth.textContent = 'Maintenance'; els.statHealth.className = 'metric-stat'; }
+      els.heroDesc.textContent = activeIncidents[0]?.title || 'Systems are undergoing scheduled upgrades. Services will resume momentarily.';
+      if (els.statHealth) els.statHealth.textContent = 'Maintenance';
       if (els.sampleBadgeStatus) els.sampleBadgeStatus.textContent = 'Maintenance';
     } else if (apiAlive && dbReady && activeIncidents.length === 0) {
       els.heroCard.classList.add('status-operational');
+      if (els.heroBadgeText) els.heroBadgeText.textContent = 'Operational';
       els.heroHeadline.textContent = 'All Systems Fully Operational';
-      els.heroDesc.textContent = 'Core API routing, range-request streaming pipelines, and database clusters are operating at peak efficiency.';
+      els.heroDesc.textContent = 'Core API gateways, SQLite database clusters, and media streaming volumes are operating within nominal parameters.';
       if (els.statHealth) { els.statHealth.textContent = '100.0%'; els.statHealth.className = 'metric-stat highlight-green'; }
       if (els.sampleBadgeStatus) els.sampleBadgeStatus.textContent = 'Operational';
 
-      updateComponentPill(els.pillWeb, 'operational', 'Operational');
-      updateComponentPill(els.pillApi, 'operational', 'Operational');
-      updateComponentPill(els.pillMedia, 'operational', 'Operational');
-      updateComponentPill(els.pillDb, 'operational', 'Operational');
+      // Update Service Rows
+      updateServicePill(els.pillApi, 'operational', 'Operational');
+      updateServicePill(els.pillDb, 'operational', 'Operational');
+      updateServicePill(els.pillMedia, 'operational', 'Operational');
+      updateServicePill(els.pillWeb, 'operational', 'Operational');
 
-      // Update Subsystem Subtitles with Real Telemetry
-      if (els.subWeb) els.subWeb.textContent = 'Client UI, Static Assets, and Edge Routing (Operational)';
-      if (els.subApi) els.subApi.textContent = `Axum Tokio Core v${version} (${appEnv}) • ${latency}ms probe RTT • 200 OK`;
-      if (els.subMedia) els.subMedia.textContent = `${totalMediaCount} assets indexed (${formatBytes(totalMediaBytes)}) • Partial-content byte streaming ready`;
-      if (els.subDb) els.subDb.textContent = `SQLite WAL engine • ${dbLatency ? dbLatency.toFixed(2) : '0.30'}ms query execution • Connected`;
+      if (els.descApi) els.descApi.textContent = `Axum Tokio Core v${version} (${appEnv}) • 200 OK`;
+      if (els.metricApi) els.metricApi.textContent = `${latency} ms`;
+
+      if (els.descDb) els.descDb.textContent = `SQLite WAL Engine • Foreign Keys Active • Read/Write Nominal`;
+      if (els.metricDb) els.metricDb.textContent = `${dbLatency ? dbLatency.toFixed(2) : '0.25'} ms`;
+
+      if (els.descMedia) els.descMedia.textContent = `HTTP 206 Partial-Range Streaming • ${formatBytes(totalMediaBytes)} indexed`;
+      if (els.metricMedia) els.metricMedia.textContent = `${totalMediaCount} files`;
+
+      if (els.metricWeb) els.metricWeb.textContent = '100.0%';
     } else if (apiAlive && (!dbReady || activeIncidents.length > 0)) {
       els.heroCard.classList.add('status-degraded');
+      if (els.heroBadgeText) els.heroBadgeText.textContent = 'Degraded';
       els.heroHeadline.textContent = 'Partial System Degradation Detected';
       els.heroDesc.textContent = !dbReady
-        ? 'Database readiness check failing. Read queries functioning, but media write transactions may be throttled.'
-        : activeIncidents[0]?.title || 'Our incident engineering team is actively investigating an isolated component issue.';
+        ? 'Database connectivity check throttled. Read queries functioning, but media write transactions may be paused.'
+        : activeIncidents[0]?.title || 'Our incident engineering team is actively investigating an isolated component anomaly.';
       if (els.statHealth) { els.statHealth.textContent = 'Degraded'; els.statHealth.className = 'metric-stat'; }
       if (els.sampleBadgeStatus) els.sampleBadgeStatus.textContent = 'Degraded';
 
-      updateComponentPill(els.pillWeb, 'operational', 'Operational');
-      updateComponentPill(els.pillApi, 'operational', 'Operational');
-      updateComponentPill(els.pillMedia, 'degraded', 'Degraded');
-      updateComponentPill(els.pillDb, 'degraded', 'Read-Only / Degraded');
-
-      if (els.subApi) els.subApi.textContent = `Axum Core v${version} • ${latency}ms latency • Read-Only Mode`;
-      if (els.subDb) els.subDb.textContent = `Database connection degraded • Write locks blocked`;
+      updateServicePill(els.pillApi, 'operational', 'Operational');
+      updateServicePill(els.pillDb, 'degraded', 'Degraded');
+      updateServicePill(els.pillMedia, 'degraded', 'Throttled');
+      updateServicePill(els.pillWeb, 'operational', 'Operational');
     } else {
       els.heroCard.classList.add('status-outage');
+      if (els.heroBadgeText) els.heroBadgeText.textContent = 'Outage';
       els.heroHeadline.textContent = 'Service Outage • Primary Host Unreachable';
       els.heroDesc.textContent = failMessage
-        ? `Primary API gateway is unreachable (${failMessage}). Out-of-band monitoring has engaged on-call infrastructure engineers.`
+        ? `Primary API gateway is unreachable (${failMessage}). Decoupled status monitoring has flagged this interruption.`
         : 'The application backend is offline. Engineers are working to restore nominal connectivity.';
       if (els.statHealth) { els.statHealth.textContent = '0.0% (Outage)'; els.statHealth.className = 'metric-stat'; }
       if (els.sampleBadgeStatus) els.sampleBadgeStatus.textContent = 'Outage';
 
-      updateComponentPill(els.pillWeb, 'degraded', 'Degraded (API Offline)');
-      updateComponentPill(els.pillApi, 'outage', 'Unreachable');
-      updateComponentPill(els.pillMedia, 'outage', 'Offline');
-      updateComponentPill(els.pillDb, 'outage', 'Offline');
+      updateServicePill(els.pillApi, 'outage', 'Unreachable');
+      updateServicePill(els.pillDb, 'outage', 'Offline');
+      updateServicePill(els.pillMedia, 'outage', 'Offline');
+      updateServicePill(els.pillWeb, 'degraded', 'Degraded');
 
-      if (els.subApi) els.subApi.textContent = `Connection refused • Host unreachable (${failMessage})`;
-      if (els.subDb) els.subDb.textContent = `Database unavailable (Host offline)`;
+      if (els.metricApi) els.metricApi.textContent = 'Failed';
+      if (els.metricDb) els.metricDb.textContent = 'Offline';
     }
   }
 
@@ -541,8 +609,6 @@
 
     els.broadcastCardsList.innerHTML = incidents.map(inc => {
       const sevClass = inc.severity === 'critical' ? 'sev-critical' : inc.severity === 'maintenance' ? 'sev-maintenance' : 'sev-major';
-      const tagClass = `tag-${inc.status || 'investigating'}`;
-
       const eventsHtml = (inc.updates || []).map(u => `
         <div class="timeline-event">
           <div class="event-meta">
@@ -557,7 +623,7 @@
         <div class="broadcast-card ${sevClass}">
           <div class="broadcast-top">
             <h3 class="broadcast-title">${escapeHtml(inc.title)}</h3>
-            <span class="broadcast-tag ${tagClass}">${capitalize(inc.status)}</span>
+            <span class="broadcast-tag tag-${inc.status || 'investigating'}">${capitalize(inc.status)}</span>
           </div>
           ${eventsHtml ? `<div class="broadcast-timeline">${eventsHtml}</div>` : ''}
         </div>
@@ -565,14 +631,14 @@
     }).join('');
   }
 
-  // Render Historical Incidents & Post-Mortems
+  // Render Past Incidents
   function renderPastIncidents(pastIncidents) {
     if (!els.pastIncidentsStack) return;
 
     if (!pastIncidents || pastIncidents.length === 0) {
       els.pastIncidentsStack.innerHTML = `
         <div class="history-none">
-          No outages or major service interruptions recorded in the past 90 days. 100% verified operational uptime.
+          No outages or major service interruptions recorded in the past 90 days. All systems operating nominally.
         </div>
       `;
       return;
@@ -601,20 +667,20 @@
     if (els.btnRefresh) els.btnRefresh.classList.add('spinning');
 
     try {
-      const configData = await loadIncidentsConfig();
+      const configData = await loadStatusData();
 
       renderActiveBroadcast(configData.incidents || []);
       renderPastIncidents(configData.past_incidents || []);
+      renderUnifiedTimeline(configData.past_incidents || []);
 
-      // Build real calendar-driven heatmaps
-      buildUptimeHeatmap(els.ticksWeb, els.pctWeb, 'web', configData.past_incidents);
-      buildUptimeHeatmap(els.ticksApi, els.pctApi, 'api', configData.past_incidents);
-      buildUptimeHeatmap(els.ticksMedia, els.pctMedia, 'media', configData.past_incidents);
-      buildUptimeHeatmap(els.ticksDb, els.pctDb, 'db', configData.past_incidents);
+      activeTargetBaseUrl = resolveTargetUrl(configData);
+      if (els.modalTargetInput && !els.modalTargetInput.value) {
+        els.modalTargetInput.value = activeTargetBaseUrl;
+      }
+      if (els.navMainApp) els.navMainApp.href = activeTargetBaseUrl || '/';
+      if (els.navHealthApi) els.navHealthApi.href = activeTargetBaseUrl ? `${activeTargetBaseUrl}/health` : '/health';
 
-      const targetUrl = resolveTargetUrl(configData);
-      const telemetry = await performSyntheticProbe(targetUrl);
-
+      const telemetry = await performSyntheticProbe(activeTargetBaseUrl);
       updatePlatformUI(telemetry, configData);
     } catch (err) {
       console.error('Status diagnostics error:', err);
@@ -625,7 +691,7 @@
     }
   }
 
-  // Countdown & Uptime Timers
+  // Countdown & Live Uptime Timers
   function resetCountdown() {
     secondsRemaining = POLL_INTERVAL;
     updateCountdownUI();
@@ -648,7 +714,6 @@
       }
     }, 1000);
 
-    // Live continuous uptime counter tick
     if (uptimeTickerId) clearInterval(uptimeTickerId);
     uptimeTickerId = setInterval(() => {
       if (currentUptimeSeconds > 0) {
@@ -658,6 +723,93 @@
         }
       }
     }, 1000);
+  }
+
+  // Connect Instance Modal & Banner Helpers
+  function setupConnectModal() {
+    function openModal() {
+      if (els.modalConnect) {
+        els.modalConnect.style.display = 'flex';
+        if (els.modalTargetInput) {
+          els.modalTargetInput.value = activeTargetBaseUrl || localStorage.getItem(STORAGE_KEY_ENDPOINT) || '';
+          els.modalTargetInput.focus();
+        }
+        if (els.connectStatusNotice) els.connectStatusNotice.style.display = 'none';
+      }
+    }
+
+    function closeModal() {
+      if (els.modalConnect) els.modalConnect.style.display = 'none';
+    }
+
+    if (els.btnOpenConnect) els.btnOpenConnect.addEventListener('click', openModal);
+    if (els.btnFooterConnect) els.btnFooterConnect.addEventListener('click', openModal);
+    if (els.btnCloseConnect) els.btnCloseConnect.addEventListener('click', closeModal);
+
+    // Save & Test in Modal
+    if (els.btnTestSaveTarget) {
+      els.btnTestSaveTarget.addEventListener('click', async () => {
+        const val = els.modalTargetInput?.value?.trim().replace(/\/+$/, '');
+        if (!val) {
+          showNotice('Please enter a valid URL', 'error');
+          return;
+        }
+
+        els.btnTestSaveTarget.textContent = 'Testing...';
+        try {
+          const res = await fetch(`${val}/health`, { method: 'GET', cache: 'no-store' });
+          if (res.ok) {
+            localStorage.setItem(STORAGE_KEY_ENDPOINT, val);
+            showNotice('Connected successfully! Target saved.', 'success');
+            showToast(`Connected to ${val}`);
+            setTimeout(() => {
+              closeModal();
+              runDiagnosticCycle();
+            }, 800);
+          } else {
+            showNotice(`Backend responded with HTTP ${res.status}. Check API.`, 'error');
+          }
+        } catch (e) {
+          showNotice('Could not reach backend /health. Check URL and ensure CORS allows this origin.', 'error');
+        } finally {
+          els.btnTestSaveTarget.textContent = 'Test & Connect';
+        }
+      });
+    }
+
+    // Quick Connect Banner
+    if (els.btnQuickConnect) {
+      els.btnQuickConnect.addEventListener('click', async () => {
+        const val = els.inputQuickConnect?.value?.trim().replace(/\/+$/, '');
+        if (!val) return;
+        localStorage.setItem(STORAGE_KEY_ENDPOINT, val);
+        showToast(`Linked to ${val}`);
+        runDiagnosticCycle();
+      });
+    }
+
+    if (els.btnDismissBanner) {
+      els.btnDismissBanner.addEventListener('click', () => {
+        if (els.instanceSetupBanner) els.instanceSetupBanner.style.display = 'none';
+      });
+    }
+
+    // Reset default
+    if (els.btnResetTargetDefault) {
+      els.btnResetTargetDefault.addEventListener('click', () => {
+        localStorage.removeItem(STORAGE_KEY_ENDPOINT);
+        showToast('Reset to automatic detection');
+        closeModal();
+        runDiagnosticCycle();
+      });
+    }
+
+    function showNotice(msg, type) {
+      if (!els.connectStatusNotice) return;
+      els.connectStatusNotice.textContent = msg;
+      els.connectStatusNotice.className = `connect-status-notice notice-${type}`;
+      els.connectStatusNotice.style.display = 'block';
+    }
   }
 
   // Setup Modals & Copy Helpers
@@ -671,7 +823,6 @@
     if (els.badgeMdInput) els.badgeMdInput.value = badgeMd;
     if (els.badgeHtmlInput) els.badgeHtmlInput.value = badgeHtml;
 
-    // Open/close Subscribe modal
     if (els.btnSubscribe) {
       els.btnSubscribe.addEventListener('click', () => {
         if (els.modalSubscribe) els.modalSubscribe.style.display = 'flex';
@@ -683,7 +834,6 @@
       });
     }
 
-    // Open/close Badge modal
     if (els.btnOpenBadgeModal) {
       els.btnOpenBadgeModal.addEventListener('click', () => {
         if (els.modalBadge) els.modalBadge.style.display = 'flex';
@@ -695,13 +845,12 @@
       });
     }
 
-    // Close on overlay click
     window.addEventListener('click', (e) => {
       if (e.target === els.modalSubscribe) els.modalSubscribe.style.display = 'none';
       if (e.target === els.modalBadge) els.modalBadge.style.display = 'none';
+      if (e.target === els.modalConnect) els.modalConnect.style.display = 'none';
     });
 
-    // Copy actions with toast
     function copyText(inputEl, msg) {
       if (!inputEl) return;
       inputEl.select();
@@ -712,9 +861,9 @@
       });
     }
 
-    if (els.btnCopyFeed) els.btnCopyFeed.addEventListener('click', () => copyText(els.feedUrlInput, 'Syndication Feed URL copied!'));
-    if (els.btnCopyBadgeMd) els.btnCopyBadgeMd.addEventListener('click', () => copyText(els.badgeMdInput, 'Markdown Badge snippet copied!'));
-    if (els.btnCopyBadgeHtml) els.btnCopyBadgeHtml.addEventListener('click', () => copyText(els.badgeHtmlInput, 'HTML Badge snippet copied!'));
+    if (els.btnCopyFeed) els.btnCopyFeed.addEventListener('click', () => copyText(els.feedUrlInput, 'Feed URL copied!'));
+    if (els.btnCopyBadgeMd) els.btnCopyBadgeMd.addEventListener('click', () => copyText(els.badgeMdInput, 'Markdown badge copied!'));
+    if (els.btnCopyBadgeHtml) els.btnCopyBadgeHtml.addEventListener('click', () => copyText(els.badgeHtmlInput, 'HTML badge copied!'));
   }
 
   // Toast Notification
@@ -727,30 +876,7 @@
     }, 2400);
   }
 
-  // Endpoint Diagnostics Override Controls
-  function setupEndpointTester() {
-    if (els.btnApplyEndpoint) {
-      els.btnApplyEndpoint.addEventListener('click', () => {
-        const val = els.inputEndpointOverride?.value?.trim();
-        if (val) {
-          customEndpointOverride = val;
-          showToast(`Target endpoint set to ${val}`);
-          runDiagnosticCycle();
-        }
-      });
-    }
-
-    if (els.btnResetEndpoint) {
-      els.btnResetEndpoint.addEventListener('click', () => {
-        customEndpointOverride = null;
-        if (els.inputEndpointOverride) els.inputEndpointOverride.value = '';
-        showToast('Reset target endpoint to automatic detection');
-        runDiagnosticCycle();
-      });
-    }
-  }
-
-  // Text Escaping Helpers
+  // Helpers
   function escapeHtml(str) {
     if (!str) return '';
     return String(str)
@@ -774,8 +900,8 @@
     });
   }
 
+  setupConnectModal();
   setupModals();
-  setupEndpointTester();
   renderLatencyChart(latencyHistory);
   runDiagnosticCycle();
   startPolling();

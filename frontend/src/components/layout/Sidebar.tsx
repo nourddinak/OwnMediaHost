@@ -244,6 +244,37 @@ export const Sidebar: React.FC<SidebarProps> = ({
               );
             })}
           </div>
+
+          {/* Out-of-Band System Status Link */}
+          <div style={{ padding: '4px 12px 10px' }}>
+            <a
+              href="/status/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="press-scale"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                width: '100%',
+                padding: '6px 10px',
+                borderRadius: 'var(--radius-sm)',
+                fontSize: '12px',
+                color: 'var(--text-tertiary)',
+                textDecoration: 'none',
+                border: '1px dashed var(--border-subtle)',
+                transition: 'all 120ms ease',
+              }}
+            >
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2ea043' }} />
+              <span>System Status</span>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto', opacity: 0.6 }}>
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+              </svg>
+            </a>
+          </div>
         </div>
 
         {/* User Footer */}
