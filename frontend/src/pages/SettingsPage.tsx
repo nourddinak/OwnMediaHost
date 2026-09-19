@@ -62,33 +62,6 @@ export const SettingsPage: React.FC = () => {
           gap: '16px',
         }}
       >
-        {/* Default Visibility */}
-        <div>
-          <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', display: 'block' }}>
-            Default Media Visibility
-          </label>
-          <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-            Determines whether newly uploaded assets are public by default or require signed URLs.
-          </span>
-          <select
-            value={settings['default_visibility'] || 'public'}
-            onChange={(e) => handleChange('default_visibility', e.target.value)}
-            style={{
-              width: '100%',
-              background: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '6px',
-              padding: '8px 12px',
-              color: '#fff',
-              fontSize: '13px',
-              marginTop: '6px',
-            }}
-          >
-            <option value="public">Public (Accessible directly via /f/...)</option>
-            <option value="private">Private (Requires temporary signed URLs)</option>
-          </select>
-        </div>
-
         {/* Duplicate Handling */}
         <div>
           <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', display: 'block' }}>

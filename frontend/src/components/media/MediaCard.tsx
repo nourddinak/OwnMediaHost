@@ -39,7 +39,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
                 src={media.thumbnail_url}
                 alt={media.filename}
                 className="media-thumbnail-img"
-                loading="lazy"
+                decoding="async"
               />
             ) : (
               <video
@@ -97,7 +97,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
             src={media.thumbnail_url || media.url}
             alt={media.filename}
             className="media-thumbnail-img"
-            loading="lazy"
+            decoding="async"
           />
         )}
 
