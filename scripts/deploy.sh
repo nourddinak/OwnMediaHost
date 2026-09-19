@@ -937,7 +937,7 @@ ${DOMAIN} {
     }
 
     # 1. Reverse proxy streaming uploads, APIs, and media endpoints
-    @backend path /api* /f/* /i/* /a/* /thumbnails/* /private/* /health* /docs* /openapi.json
+    @backend path /api* /f/* /i/* /a/* /thumbnails/* /private/* /health*
     handle @backend {
         reverse_proxy 127.0.0.1:${BACKEND_PORT} {
             flush_interval -1

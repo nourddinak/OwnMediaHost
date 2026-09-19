@@ -13,7 +13,7 @@ use axum::{
     extract::{DefaultBodyLimit, Request, State},
     http::{HeaderValue, StatusCode},
     middleware::{self, Next},
-    response::{Html, IntoResponse, Response},
+    response::{IntoResponse, Response},
     routing::get,
     Json, Router,
 };
@@ -51,8 +51,7 @@ pub fn create_router(
         .nest("/keys", keys::router(pool.clone(), config.clone()))
         .nest("/storage", storage_stats::router(pool.clone(), storage.clone(), config.clone()))
         .nest("/activity", activity::router(pool.clone(), config.clone()))
-        .nest("/settings", settings::router(pool.clone(), config.clone()))
-        .route("/openapi.json", get(openapi_spec));
+        .nest("/settings", settings::router(pool.clone(), config.clone()));
 
     let delivery_routes = delivery::router(pool.clone(), storage.clone(), config.clone());
     let alias_routes = aliases::router(pool.clone(), storage.clone(), config.clone());
@@ -69,8 +68,6 @@ pub fn create_router(
             let state_clone = state.clone();
             move || health_ready(state_clone)
         }))
-        // API Documentation
-        .route("/docs", get(swagger_ui))
         // Static delivery and aliases (all Router<()>)
         .merge(delivery_routes)
         .merge(alias_routes)
@@ -88,7 +85,6 @@ async fn api_root() -> impl IntoResponse {
         "name": "OwnMediaHost API",
         "version": env!("CARGO_PKG_VERSION"),
         "status": "operational",
-        "documentation": "/docs",
         "health": "/health",
         "api_v1": "/api/v1"
     }))
@@ -99,7 +95,6 @@ async fn api_v1_root() -> impl IntoResponse {
         "name": "OwnMediaHost API v1",
         "version": "1.0",
         "status": "operational",
-        "documentation": "/docs",
         "health": "/health",
         "endpoints": {
             "auth": "/api/v1/auth",
@@ -109,8 +104,7 @@ async fn api_v1_root() -> impl IntoResponse {
             "keys": "/api/v1/keys",
             "storage": "/api/v1/storage",
             "activity": "/api/v1/activity",
-            "settings": "/api/v1/settings",
-            "openapi": "/api/v1/openapi.json"
+            "settings": "/api/v1/settings"
         }
     }))
 }
@@ -151,9 +145,7 @@ async fn activity_logging_middleware(
     let is_excluded = path.starts_with("/f/")
         || path.starts_with("/thumbnails/")
         || path.starts_with("/a/")
-        || path.starts_with("/health")
-        || path.starts_with("/docs")
-        || path == "/openapi.json";
+        || path.starts_with("/health");
 
     if !is_excluded {
         let pool = state.pool.clone();
@@ -182,102 +174,7 @@ async fn activity_logging_middleware(
     response
 }
 
-async fn swagger_ui() -> Html<&'static str> {
-    Html(r#"<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>OwnMediaHost API Documentation</title>
-  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css" />
-  <style>
-    body { margin: 0; background: #090909; color: #fff; }
-    .swagger-ui .topbar { display: none; }
-    .swagger-ui { filter: invert(88%) hue-rotate(180deg); }
-    .swagger-ui .microlight { filter: invert(100%) hue-rotate(180deg); }
-  </style>
-</head>
-<body>
-<div id="swagger-ui"></div>
-<script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
-<script>
-  window.onload = () => {
-    window.ui = SwaggerUIBundle({
-      url: '/api/v1/openapi.json',
-      dom_id: '#swagger-ui',
-      deepLinking: true,
-      presets: [
-        SwaggerUIBundle.presets.apis,
-        SwaggerUIBundle.SwaggerUIStandalonePreset
-      ],
-      layout: "BaseLayout"
-    });
-  };
-</script>
-</body>
-</html>"#)
-}
 
-async fn openapi_spec() -> impl IntoResponse {
-    Json(serde_json::json!({
-        "openapi": "3.0.3",
-        "info": {
-            "title": "OwnMediaHost API",
-            "version": "1.0.0",
-            "description": "Production-ready, self-hosted personal media infrastructure platform."
-        },
-        "servers": [
-            { "url": "/api/v1", "description": "API v1 root" }
-        ],
-        "paths": {
-            "/files": {
-                "post": {
-                    "summary": "Upload a media file (streaming multipart)",
-                    "responses": { "200": { "description": "Media uploaded" } }
-                },
-                "get": {
-                    "summary": "List media assets with filtering and pagination",
-                    "responses": { "200": { "description": "List of media files" } }
-                }
-            },
-            "/files/{id}": {
-                "get": { "summary": "Get media details by ID or public ID" },
-                "patch": { "summary": "Update media metadata" },
-                "delete": { "summary": "Move media to trash (soft-delete)" }
-            },
-            "/files/{id}/content": {
-                "put": { "summary": "In-place file replacement preserving ID, public ID, and aliases" }
-            },
-            "/files/{id}/restore": {
-                "post": { "summary": "Restore media from trash" }
-            },
-            "/files/{id}/permanent": {
-                "delete": { "summary": "Permanently delete media from disk and database" }
-            },
-            "/uploads": {
-                "post": { "summary": "Initialize resumable chunked upload session" }
-            },
-            "/uploads/{id}": {
-                "patch": { "summary": "Upload single chunk" },
-                "delete": { "summary": "Abort resumable upload session" }
-            },
-            "/uploads/{id}/complete": {
-                "post": { "summary": "Complete and assemble chunked upload" }
-            },
-            "/aliases": {
-                "get": { "summary": "List all vanity aliases" },
-                "post": { "summary": "Create vanity alias" }
-            },
-            "/keys": {
-                "get": { "summary": "List API keys" },
-                "post": { "summary": "Generate new scoped API key" }
-            },
-            "/storage/stats": {
-                "get": { "summary": "Get real disk space and breakdown statistics" }
-            }
-        }
-    }))
-}
 
 #[cfg(test)]
 mod tests {

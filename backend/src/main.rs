@@ -100,7 +100,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let bind_addr = format!("{}:{}", config_arc.host, config_arc.port);
     info!("OwnMediaHost server listening on http://{}", bind_addr);
-    info!("API documentation available at http://{}/docs", bind_addr);
 
     let listener = tokio::net::TcpListener::bind(&bind_addr).await?;
     axum::serve(listener, app)

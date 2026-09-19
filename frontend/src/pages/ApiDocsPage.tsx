@@ -55,7 +55,6 @@ const ENDPOINTS: EndpointDef[] = [
   "name": "OwnMediaHost API v1",
   "version": "1.0",
   "status": "operational",
-  "documentation": "/docs",
   "endpoints": {
     "auth": "/api/v1/auth",
     "files": "/api/v1/files",

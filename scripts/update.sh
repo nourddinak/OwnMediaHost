@@ -322,7 +322,7 @@ ${caddy_domain} {
         max_size 10GB
     }
 
-    @backend path /api* /f/* /i/* /a/* /thumbnails/* /private/* /health* /docs* /openapi.json
+    @backend path /api* /f/* /i/* /a/* /thumbnails/* /private/* /health*
     handle @backend {
         reverse_proxy 127.0.0.1:${caddy_port} {
             flush_interval -1
