@@ -71,3 +71,6 @@ desktop.ini
 logs/
 tmp/
 temp/
+
+# --- Decoupled Standalone Repositories ---
+status/
