@@ -67,8 +67,12 @@ export const UploadDrawer: React.FC<UploadDrawerProps> = ({
       );
 
       try {
-        // Generate browser-native thumbnail and extract dimensions/duration via HTML5 Canvas
-        const meta = await generateClientMediaMeta(item.file);
+        // Fast-path: For images, upload directly to let backend generate SIMD thumbnails in 1ms.
+        // For videos, run lightweight inspection for dimension & poster capture.
+        let meta: { thumbnailBlob?: Blob; width?: number; height?: number; duration?: number } = {};
+        if (item.file.type.startsWith('video/')) {
+          meta = await generateClientMediaMeta(item.file);
+        }
 
         await api.uploadFile(item.file, {
           folder_id: selectedFolder || undefined,

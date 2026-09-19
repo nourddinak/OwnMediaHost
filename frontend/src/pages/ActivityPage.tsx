@@ -1,27 +1,44 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api, ApiLogItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
+import { Pagination } from '../components/common/Pagination';
 
 export const ActivityPage: React.FC = () => {
   const { toast } = useToast();
   const [logs, setLogs] = useState<ApiLogItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [loading, setLoading] = useState(true);
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async (targetPage = page, targetPageSize = pageSize) => {
     setLoading(true);
     try {
-      const res = await api.getActivityLogs({ limit: 100 });
+      const res = await api.getActivityLogs({
+        limit: targetPageSize,
+        offset: (targetPage - 1) * targetPageSize,
+      });
       setLogs(res.items);
+      setTotal(res.total);
     } catch (err: any) {
       toast(err.message, 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, pageSize, toast]);
 
   useEffect(() => {
-    fetchLogs();
-  }, []);
+    fetchLogs(page, pageSize);
+  }, [page, pageSize, fetchLogs]);
+
+  const handlePageChange = (newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handlePageSizeChange = (newSize: number) => {
+    setPageSize(newSize);
+    setPage(1);
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '1000px' }}>
@@ -33,7 +50,7 @@ export const ActivityPage: React.FC = () => {
           </p>
         </div>
 
-        <button onClick={fetchLogs} className="btn btn-secondary press-scale">
+        <button onClick={() => fetchLogs(page, pageSize)} className="btn btn-secondary press-scale">
           ↻ Refresh
         </button>
       </div>
@@ -107,6 +124,20 @@ export const ActivityPage: React.FC = () => {
           </table>
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {total > 0 && (
+        <Pagination
+          currentPage={page}
+          totalItems={total}
+          pageSize={pageSize}
+          pageSizeOptions={[10, 25, 50, 100]}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+          itemName="logs"
+        />
+      )}
     </div>
   );
 };
+

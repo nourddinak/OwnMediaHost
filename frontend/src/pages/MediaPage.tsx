@@ -3,6 +3,7 @@ import { api, MediaItem, FolderItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
 import { MediaCard } from '../components/media/MediaCard';
 import { MediaDetailDrawer } from '../components/media/MediaDetailDrawer';
+import { Pagination } from '../components/common/Pagination';
 import { formatBytes } from '../utils/formatters';
 
 interface MediaPageProps {
@@ -26,6 +27,8 @@ export const MediaPage: React.FC<MediaPageProps> = ({
 
   const [mediaList, setMediaList] = useState<MediaItem[]>([]);
   const [total, setTotal] = useState<number>(0);
+  const [page, setPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(48);
   const [loading, setLoading] = useState<boolean>(true);
   const [selectedFolder, setSelectedFolder] = useState<string>(folderId || '');
   const [sortBy, setSortBy] = useState<string>('newest');
@@ -36,8 +39,14 @@ export const MediaPage: React.FC<MediaPageProps> = ({
   useEffect(() => {
     if (folderId !== undefined) {
       setSelectedFolder(folderId);
+      setPage(1);
     }
   }, [folderId]);
+
+  // Reset to page 1 on search or filter change
+  useEffect(() => {
+    setPage(1);
+  }, [searchTerm, selectedFolder, sortBy, mediaTypeFilter]);
 
   const fetchMedia = useCallback(async () => {
     setLoading(true);
@@ -47,7 +56,8 @@ export const MediaPage: React.FC<MediaPageProps> = ({
         folder_id: selectedFolder || undefined,
         search: searchTerm || undefined,
         sort: sortBy,
-        limit: 100,
+        limit: pageSize,
+        offset: (page - 1) * pageSize,
       });
       setMediaList(res.items);
       setTotal(res.total);
@@ -64,7 +74,7 @@ export const MediaPage: React.FC<MediaPageProps> = ({
     } finally {
       setLoading(false);
     }
-  }, [mediaTypeFilter, selectedFolder, searchTerm, sortBy, toast]);
+  }, [mediaTypeFilter, selectedFolder, searchTerm, sortBy, page, pageSize, toast]);
 
   useEffect(() => {
     fetchMedia();
@@ -400,6 +410,22 @@ export const MediaPage: React.FC<MediaPageProps> = ({
             </tbody>
           </table>
         </div>
+      )}
+
+      {/* Pagination Controls */}
+      {total > 0 && (
+        <Pagination
+          currentPage={page}
+          totalItems={total}
+          pageSize={pageSize}
+          pageSizeOptions={[24, 48, 96, 192]}
+          onPageChange={(newPage) => setPage(newPage)}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          }}
+          itemName="files"
+        />
       )}
 
       {/* Media Detail Drawer */}

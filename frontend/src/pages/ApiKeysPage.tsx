@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { api, ApiKeyItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
 import { copyTextToClipboard } from '../utils/clipboard';
+import { Pagination } from '../components/common/Pagination';
 
 export const ApiKeysPage: React.FC = () => {
   const { toast } = useToast();
   const [keys, setKeys] = useState<ApiKeyItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const [name, setName] = useState('');
   const [selectedPerms, setSelectedPerms] = useState<string[]>([
@@ -91,6 +94,10 @@ export const ApiKeysPage: React.FC = () => {
       toast('Could not access clipboard. Please copy manually.', 'error');
     }
   };
+
+  const totalPages = Math.ceil(keys.length / pageSize) || 1;
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const paginatedKeys = keys.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '900px' }}>
@@ -313,7 +320,7 @@ export const ApiKeysPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {keys.map((k) => (
+              {paginatedKeys.map((k) => (
                 <tr key={k.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                   <td style={{ padding: '12px 18px', fontWeight: 500 }}>
                     {k.name}
@@ -371,6 +378,22 @@ export const ApiKeysPage: React.FC = () => {
               ))}
             </tbody>
           </table>
+        )}
+
+        {keys.length > 0 && (
+          <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-subtle)' }}>
+            <Pagination
+              currentPage={safePage}
+              totalItems={keys.length}
+              pageSize={pageSize}
+              pageSizeOptions={[10, 25, 50]}
+              onPageChange={(p) => setPage(p)}
+              onPageSizeChange={(s) => {
+                setPageSize(s);
+                setPage(1);
+              }}
+            />
+          </div>
         )}
       </div>
     </div>

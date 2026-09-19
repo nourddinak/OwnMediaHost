@@ -15,6 +15,15 @@ export const MediaCard: React.FC<MediaCardProps> = ({
   onSelect,
   onClick,
 }) => {
+  const getVersionedUrl = (url?: string) => {
+    if (!url) return '';
+    const sep = url.includes('?') ? '&' : '?';
+    return `${url}${sep}v=${encodeURIComponent(media.updated_at || '')}`;
+  };
+
+  const versionedThumb = getVersionedUrl(media.thumbnail_url);
+  const versionedMedia = getVersionedUrl(media.url);
+
   return (
     <div
       className={`media-card ${isSelected ? 'selected' : ''}`}
@@ -34,16 +43,16 @@ export const MediaCard: React.FC<MediaCardProps> = ({
               overflow: 'hidden',
             }}
           >
-            {media.thumbnail_url ? (
+            {versionedThumb ? (
               <img
-                src={media.thumbnail_url}
+                src={versionedThumb}
                 alt={media.filename}
                 className="media-thumbnail-img"
                 decoding="async"
               />
             ) : (
               <video
-                src={`${media.url}#t=1.0`}
+                src={`${versionedMedia}#t=1.0`}
                 preload="metadata"
                 muted
                 playsInline
@@ -94,7 +103,7 @@ export const MediaCard: React.FC<MediaCardProps> = ({
           </div>
         ) : (
           <img
-            src={media.thumbnail_url || media.url}
+            src={versionedThumb || versionedMedia}
             alt={media.filename}
             className="media-thumbnail-img"
             decoding="async"

@@ -686,6 +686,12 @@ async fn replace_file_content(
         return Err(AppError::BadRequest("No replacement file provided".into()));
     }
 
+    // Purge any existing cached thumbnails so replacements take immediate effect
+    let _ = state.storage.delete_file(&format!("generated/thumbnails/{}.webp", media.public_id)).await;
+    if new_thumbnail_bytes.is_none() && MediaProcessor::detect_type(&new_bytes, &new_filename).2 != "image" {
+        let _ = state.storage.delete_file(&format!("generated/thumbnails/{}.jpg", media.public_id)).await;
+    }
+
     let processed = process_media_payload(
         &state.storage,
         &new_bytes,
@@ -701,33 +707,64 @@ async fn replace_file_content(
     // Validate allowed formats
     validate_allowed_format(&state.pool, &processed.media_type, &processed.extension).await?;
 
-    // Overwrite physical file at storage_path
-    state.storage.write_file(&media.storage_path, &new_bytes).await?;
+    // Determine target storage path for the new format/extension
+    let new_storage_path = LocalStorageProvider::generate_storage_path(
+        &processed.media_type,
+        &media.public_id,
+        &processed.extension,
+    );
+
+    // If extension/media_type changed and new_storage_path differs from old media.storage_path:
+    if new_storage_path != media.storage_path {
+        // Write new file at new storage path
+        state.storage.write_file(&new_storage_path, &new_bytes).await?;
+        // Delete old media file from disk to prevent orphaned files!
+        let _ = state.storage.delete_file(&media.storage_path).await;
+    } else {
+        // Overwrite physical file at existing storage_path
+        state.storage.write_file(&media.storage_path, &new_bytes).await?;
+    }
 
     let now = chrono::Utc::now().to_rfc3339();
 
     sqlx::query(
-        "UPDATE media SET file_size = ?, mime_type = ?, extension = ?, sha256 = ?, width = ?, height = ?, updated_at = ? WHERE id = ?"
+        "UPDATE media SET storage_path = ?, file_size = ?, mime_type = ?, extension = ?, media_type = ?, sha256 = ?, width = ?, height = ?, duration = ?, updated_at = ? WHERE id = ?"
     )
+    .bind(&new_storage_path)
     .bind(new_bytes.len() as i64)
     .bind(&processed.mime_type)
     .bind(&processed.extension)
+    .bind(&processed.media_type)
     .bind(&processed.sha256_hash)
     .bind(processed.width)
     .bind(processed.height)
+    .bind(processed.duration)
     .bind(&now)
     .bind(&media.id)
     .execute(&state.pool)
     .await?;
 
     let mut updated_media = media;
+    updated_media.storage_path = new_storage_path;
     updated_media.file_size = new_bytes.len() as i64;
     updated_media.mime_type = processed.mime_type;
     updated_media.extension = processed.extension;
+    updated_media.media_type = processed.media_type;
     updated_media.sha256 = processed.sha256_hash;
     updated_media.width = processed.width;
     updated_media.height = processed.height;
+    updated_media.duration = processed.duration;
     updated_media.updated_at = now;
+
+    if updated_media.media_type == "video" && (updated_media.width.is_none() || updated_media.height.is_none()) {
+        let payload = serde_json::to_value(VideoJobPayload {
+            media_id: updated_media.id.clone(),
+            storage_path: updated_media.storage_path.clone(),
+            public_id: updated_media.public_id.clone(),
+        })
+        .unwrap();
+        let _ = enqueue_job(&state.pool, "video_process", &payload).await;
+    }
 
     let response = format_media_response(&state.pool, &updated_media, &state.config).await?;
     info!("Replaced content for media {} successfully.", updated_media.id);

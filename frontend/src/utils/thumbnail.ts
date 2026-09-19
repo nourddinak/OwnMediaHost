@@ -24,8 +24,19 @@ export async function generateImageThumbnail(
     const img = new Image();
     const url = URL.createObjectURL(file);
 
+    let resolved = false;
+    const finish = (res: GeneratedMediaMeta) => {
+      if (!resolved) {
+        resolved = true;
+        clearTimeout(timer);
+        URL.revokeObjectURL(url);
+        resolve(res);
+      }
+    };
+
+    const timer = setTimeout(() => finish({}), 1000);
+
     img.onload = () => {
-      URL.revokeObjectURL(url);
       const width = img.naturalWidth || img.width;
       const height = img.naturalHeight || img.height;
 
@@ -47,13 +58,13 @@ export async function generateImageThumbnail(
       canvas.height = Math.max(1, targetH);
       const ctx = canvas.getContext('2d');
       if (!ctx) {
-        return resolve({ width, height });
+        return finish({ width, height });
       }
 
       ctx.drawImage(img, 0, 0, targetW, targetH);
       canvas.toBlob(
         (blob) => {
-          resolve({
+          finish({
             thumbnailBlob: blob || undefined,
             width,
             height,
@@ -65,8 +76,7 @@ export async function generateImageThumbnail(
     };
 
     img.onerror = () => {
-      URL.revokeObjectURL(url);
-      resolve({});
+      finish({});
     };
 
     img.src = url;
@@ -222,13 +232,13 @@ export async function generateVideoThumbnail(
       }
     };
 
-    // Safety timeout: 8 seconds total for the entire thumbnail process
+    // Safety timeout: 1.2 seconds max for client thumbnail inspection
     const timer = setTimeout(() => {
       if (!resolved) {
         cleanup();
         resolve({});
       }
-    }, 8000);
+    }, 1200);
 
     // Pick seek targets: try 1s/15% first, then 2.5s/25%, then 5s/40%
     const getSeekTime = (dur: number, attempt: number): number => {

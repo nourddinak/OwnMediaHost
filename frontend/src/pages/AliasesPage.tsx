@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { api, AliasItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
 import { copyTextToClipboard } from '../utils/clipboard';
+import { Pagination } from '../components/common/Pagination';
 
 export const AliasesPage: React.FC = () => {
   const { toast } = useToast();
@@ -10,6 +11,8 @@ export const AliasesPage: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [aliasPath, setAliasPath] = useState('');
   const [targetMediaId, setTargetMediaId] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const fetchAliases = async () => {
     setLoading(true);
@@ -67,6 +70,10 @@ export const AliasesPage: React.FC = () => {
       toast('Could not access clipboard. Please copy manually.', 'error');
     }
   };
+
+  const totalPages = Math.ceil(aliases.length / pageSize) || 1;
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const paginatedAliases = aliases.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '900px' }}>
@@ -180,7 +187,7 @@ export const AliasesPage: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {aliases.map((a) => (
+              {paginatedAliases.map((a) => (
                 <tr key={a.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
                   <td style={{ padding: '12px 18px', fontWeight: 600, color: 'var(--accent-blue)' }}>
                     /a/{a.alias_path}
@@ -213,6 +220,22 @@ export const AliasesPage: React.FC = () => {
               ))}
             </tbody>
           </table>
+        )}
+
+        {aliases.length > 0 && (
+          <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-subtle)' }}>
+            <Pagination
+              currentPage={safePage}
+              totalItems={aliases.length}
+              pageSize={pageSize}
+              pageSizeOptions={[10, 25, 50]}
+              onPageChange={(p) => setPage(p)}
+              onPageSizeChange={(s) => {
+                setPageSize(s);
+                setPage(1);
+              }}
+            />
+          </div>
         )}
       </div>
     </div>

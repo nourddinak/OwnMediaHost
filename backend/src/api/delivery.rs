@@ -205,7 +205,7 @@ pub async fn serve_file_with_range(
     let body = Body::from_stream(stream);
 
     let cache_control = if is_immutable {
-        "public, max-age=31536000, immutable"
+        "public, max-age=86400, must-revalidate"
     } else {
         "public, max-age=3600, must-revalidate"
     };

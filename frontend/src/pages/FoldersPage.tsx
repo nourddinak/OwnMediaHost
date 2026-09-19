@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { api, FolderItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
+import { Pagination } from '../components/common/Pagination';
 
 interface FoldersPageProps {
   folders: FolderItem[];
@@ -18,6 +19,8 @@ export const FoldersPage: React.FC<FoldersPageProps> = ({
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
 
   const handleCreate = async () => {
     if (!newFolderName.trim()) return;
@@ -56,6 +59,10 @@ export const FoldersPage: React.FC<FoldersPageProps> = ({
       toast(err.message, 'error');
     }
   };
+
+  const totalPages = Math.ceil(folders.length / pageSize) || 1;
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const paginatedFolders = folders.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '800px' }}>
@@ -128,7 +135,7 @@ export const FoldersPage: React.FC<FoldersPageProps> = ({
           </div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {folders.map((f) => {
+            {paginatedFolders.map((f) => {
               const isEditing = editingId === f.id;
               return (
                 <div
@@ -219,6 +226,22 @@ export const FoldersPage: React.FC<FoldersPageProps> = ({
                 </div>
               );
             })}
+          </div>
+        )}
+
+        {folders.length > 0 && (
+          <div style={{ padding: '12px 18px', borderTop: '1px solid var(--border-subtle)' }}>
+            <Pagination
+              currentPage={safePage}
+              totalItems={folders.length}
+              pageSize={pageSize}
+              pageSizeOptions={[10, 25, 50]}
+              onPageChange={(p) => setPage(p)}
+              onPageSizeChange={(s) => {
+                setPageSize(s);
+                setPage(1);
+              }}
+            />
           </div>
         )}
       </div>

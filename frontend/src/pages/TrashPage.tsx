@@ -1,34 +1,43 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api, MediaItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
+import { Pagination } from '../components/common/Pagination';
 import { formatBytes } from '../utils/formatters';
 
 export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChanged }) => {
   const { toast } = useToast();
   const [items, setItems] = useState<MediaItem[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
   const [loading, setLoading] = useState(true);
 
-  const fetchTrash = async () => {
+  const fetchTrash = useCallback(async (targetPage = page, targetPageSize = pageSize) => {
     setLoading(true);
     try {
-      const res = await api.listFiles({ trash: true, limit: 100 });
+      const res = await api.listFiles({
+        trash: true,
+        limit: targetPageSize,
+        offset: (targetPage - 1) * targetPageSize,
+      });
       setItems(res.items);
+      setTotal(res.total);
     } catch (err: any) {
       toast(err.message, 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [page, pageSize, toast]);
 
   useEffect(() => {
-    fetchTrash();
-  }, []);
+    fetchTrash(page, pageSize);
+  }, [page, pageSize, fetchTrash]);
 
   const handleRestore = async (id: string, name: string) => {
     try {
       await api.restoreFile(id);
       toast(`Restored '${name}'`);
-      fetchTrash();
+      fetchTrash(page, pageSize);
       onDataChanged();
     } catch (err: any) {
       toast(err.message, 'error');
@@ -42,7 +51,7 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
     try {
       await api.permanentDeleteFile(id);
       toast(`Permanently deleted '${name}'`);
-      fetchTrash();
+      fetchTrash(page, pageSize);
       onDataChanged();
     } catch (err: any) {
       toast(err.message, 'error');
@@ -60,7 +69,8 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
         action: 'permanent_delete',
       });
       toast('Trash emptied');
-      fetchTrash();
+      setPage(1);
+      fetchTrash(1, pageSize);
       onDataChanged();
     } catch (err: any) {
       toast(err.message, 'error');
@@ -147,6 +157,22 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
           </table>
         )}
       </div>
+
+      {/* Pagination Controls */}
+      {total > 0 && (
+        <Pagination
+          currentPage={page}
+          totalItems={total}
+          pageSize={pageSize}
+          pageSizeOptions={[10, 25, 50, 100]}
+          onPageChange={(newPage) => setPage(newPage)}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize);
+            setPage(1);
+          }}
+          itemName="deleted files"
+        />
+      )}
     </div>
   );
 };

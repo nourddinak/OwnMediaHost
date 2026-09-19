@@ -3,6 +3,7 @@ import { api, MediaItem } from '../../api/client';
 import { useToast } from '../../context/ToastContext';
 import { copyTextToClipboard } from '../../utils/clipboard';
 import { formatBytes } from '../../utils/formatters';
+import { generateClientMediaMeta } from '../../utils/thumbnail';
 
 interface MediaDetailDrawerProps {
   media: MediaItem | null;
@@ -22,6 +23,8 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
   const permanentInputRef = useRef<HTMLInputElement>(null);
 
   const [replacing, setReplacing] = useState(false);
+  const [replaceProgress, setReplaceProgress] = useState<number | null>(null);
+  const [cacheKey, setCacheKey] = useState<number>(Date.now());
   const [signingPrivate, setSigningPrivate] = useState(false);
   const [privateExpires, setPrivateExpires] = useState(3600); // 1 hour
   const [signedPrivateUrl, setSignedPrivateUrl] = useState('');
@@ -103,14 +106,33 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
     if (!file) return;
 
     setReplacing(true);
+    setReplaceProgress(0);
     try {
-      const updated = await api.replaceFileContent(media.id, file);
+      let thumbnailBlob: Blob | undefined = undefined;
+      if (file.type.startsWith('video/')) {
+        const meta = await generateClientMediaMeta(file);
+        thumbnailBlob = meta.thumbnailBlob;
+      }
+
+      const updated = await api.replaceFileContent(media.id, file, {
+        thumbnail: thumbnailBlob,
+        onProgress: (percent) => {
+          setReplaceProgress(percent);
+        },
+      });
+
+      const nextKey = Date.now();
+      setCacheKey(nextKey);
       toast('File content replaced successfully!');
       onUpdate(updated);
     } catch (err: any) {
       toast(err.message || 'Failed to replace file', 'error');
     } finally {
       setReplacing(false);
+      setReplaceProgress(null);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -200,17 +222,66 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
               justifyContent: 'center',
               minHeight: '220px',
               maxHeight: '320px',
+              position: 'relative',
             }}
           >
+            {/* Real-time Replacement Progress Overlay */}
+            {replacing && replaceProgress !== null && (
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  background: 'rgba(0, 0, 0, 0.78)',
+                  backdropFilter: 'blur(8px)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '12px',
+                  zIndex: 10,
+                  padding: '20px',
+                }}
+              >
+                <div style={{ fontSize: '13px', fontWeight: 600, color: '#ffffff' }}>
+                  Uploading Replacement ({replaceProgress}%)
+                </div>
+                <div
+                  style={{
+                    width: '100%',
+                    maxWidth: '220px',
+                    height: '6px',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: '999px',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div
+                    style={{
+                      height: '100%',
+                      width: `${replaceProgress}%`,
+                      background: 'var(--accent-blue)',
+                      borderRadius: '999px',
+                      transition: 'width 0.15s ease-out',
+                    }}
+                  />
+                </div>
+                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                  Processing media in-place...
+                </span>
+              </div>
+            )}
+
             {media.media_type === 'video' ? (
               <video
-                src={media.url}
+                key={`${media.url}-${cacheKey}`}
+                src={`${media.url}${media.url.includes('?') ? '&' : '?'}v=${cacheKey}`}
                 controls
                 style={{ width: '100%', maxHeight: '320px', objectFit: 'contain' }}
               />
             ) : (
               <img
-                src={media.url}
+                key={`${media.url}-${cacheKey}`}
+                src={`${media.url}${media.url.includes('?') ? '&' : '?'}v=${cacheKey}`}
                 alt={media.filename}
                 style={{ maxWidth: '100%', maxHeight: '320px', objectFit: 'contain' }}
               />
@@ -322,7 +393,9 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
               className="btn btn-secondary press-scale"
               title="Replace file content while keeping identical URL and ID"
             >
-              {replacing ? 'Replacing...' : 'Replace Content'}
+              {replacing
+                ? `Replacing${replaceProgress !== null ? ` (${replaceProgress}%)` : '...'}`
+                : 'Replace Content'}
             </button>
             <input
               ref={fileInputRef}

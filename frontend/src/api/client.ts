@@ -209,6 +209,10 @@ export const api = {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `${API_BASE}/files`);
       xhr.withCredentials = true;
+      const token = getStoredToken();
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
 
       if (opts.onProgress) {
         xhr.upload.onprogress = (e) => {
@@ -250,13 +254,55 @@ export const api = {
     });
   },
 
-  replaceFileContent: (id: string, file: File, thumbnail?: Blob): Promise<MediaItem> => {
-    const formData = new FormData();
-    formData.append('file', file);
-    if (thumbnail) formData.append('thumbnail', thumbnail, 'thumbnail.jpg');
-    return request<MediaItem>(`/files/${id}/content`, {
-      method: 'PUT',
-      body: formData,
+  replaceFileContent: (
+    id: string,
+    file: File,
+    opts?: {
+      thumbnail?: Blob;
+      onProgress?: (percent: number) => void;
+    }
+  ): Promise<MediaItem> => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('PUT', `${API_BASE}/files/${id}/content`);
+      xhr.withCredentials = true;
+
+      const token = getStoredToken();
+      if (token) {
+        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+      }
+
+      if (opts?.onProgress) {
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const percent = Math.round((e.loaded / e.total) * 100);
+            opts.onProgress!(percent);
+          }
+        };
+      }
+
+      xhr.onload = () => {
+        try {
+          const json = JSON.parse(xhr.responseText);
+          if (xhr.status >= 200 && xhr.status < 300 && json.success) {
+            resolve(json.data);
+          } else {
+            reject(new Error(json.error?.message || 'Replacement failed'));
+          }
+        } catch {
+          reject(new Error('Invalid response from server'));
+        }
+      };
+
+      xhr.onerror = () => reject(new Error('Network error during replacement upload'));
+
+      const formData = new FormData();
+      formData.append('file', file);
+      if (opts?.thumbnail) {
+        formData.append('thumbnail', opts.thumbnail, 'thumbnail.jpg');
+      }
+
+      xhr.send(formData);
     });
   },
 
