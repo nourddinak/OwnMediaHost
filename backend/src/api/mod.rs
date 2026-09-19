@@ -43,6 +43,7 @@ pub fn create_router(
     };
 
     let api_v1: Router = Router::new()
+        .route("/", get(api_v1_root))
         .nest("/auth", auth::router(pool.clone(), config.clone()))
         .nest("/files", files::router(pool.clone(), storage.clone(), config.clone()))
         .nest("/folders", folders::router(pool.clone(), config.clone()))
@@ -57,8 +58,10 @@ pub fn create_router(
     let alias_routes = aliases::router(pool.clone(), storage.clone(), config.clone());
 
     Router::new()
-        // Root status endpoint
+        // Root status endpoints
         .route("/", get(api_root))
+        .route("/api", get(api_root))
+        .route("/api/v1", get(api_v1_root))
         // Health endpoints
         .route("/health", get(health_check))
         .route("/health/live", get(health_live))
@@ -88,6 +91,27 @@ async fn api_root() -> impl IntoResponse {
         "documentation": "/docs",
         "health": "/health",
         "api_v1": "/api/v1"
+    }))
+}
+
+async fn api_v1_root() -> impl IntoResponse {
+    Json(serde_json::json!({
+        "name": "OwnMediaHost API v1",
+        "version": "1.0",
+        "status": "operational",
+        "documentation": "/docs",
+        "health": "/health",
+        "endpoints": {
+            "auth": "/api/v1/auth",
+            "files": "/api/v1/files",
+            "folders": "/api/v1/folders",
+            "tags": "/api/v1/tags",
+            "keys": "/api/v1/keys",
+            "storage": "/api/v1/storage",
+            "activity": "/api/v1/activity",
+            "settings": "/api/v1/settings",
+            "openapi": "/api/v1/openapi.json"
+        }
     }))
 }
 

@@ -44,10 +44,22 @@ pub struct UserPublic {
 pub fn router(pool: DbPool, config: Arc<AppConfig>) -> Router {
     let state = AuthState { pool, config };
     Router::new()
+        .route("/", get(auth_root))
         .route("/login", post(login))
         .route("/logout", post(logout))
         .route("/me", get(me))
         .with_state(state)
+}
+
+async fn auth_root() -> impl IntoResponse {
+    Json(serde_json::json!({
+        "module": "auth",
+        "endpoints": {
+            "login": "POST /api/v1/auth/login",
+            "logout": "POST /api/v1/auth/logout",
+            "me": "GET /api/v1/auth/me"
+        }
+    }))
 }
 
 async fn login(
