@@ -1,12 +1,12 @@
-**# OwnMediaHost — Personal Media Infrastructure Platform**
+# OwnMediaHost — Personal Media Infrastructure Platform
 
-A high-performance, production-ready, self-hosted personal media infrastructure platform built with **\*\*Rust (Axum, Tokio, SQLx)\*\***, **\*\*SQLite (WAL mode)\*\***, **\*\*Caddy (Auto-SSL)\*\***, and an **\*\*Obsidian Dark React dashboard\*\***.
+A high-performance, production-ready, self-hosted personal media infrastructure platform built with **Rust (Axum, Tokio, SQLx)**, **SQLite (WAL mode)**, **Caddy (Auto-SSL)**, and an **Obsidian Dark React dashboard**.
 
-\---
+---
 
-## ⚡ Quick Command Reference
+## ⚡ Quick Command Reference (1-Click Copy)
 
-> Every command below is in its own code block, so GitHub automatically shows a **Copy** button.
+> Every command below is in its own code block so GitHub displays a dedicated **Copy** button.
 
 ### 🚀 Deploy / Install
 
@@ -21,12 +21,11 @@ curl -fsSL https://raw.githubusercontent.com/nourddinak/OwnMediaHost/main/script
 ```
 
 ### 🔄 Update Server
-
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/nourddinak/OwnMediaHost/main/scripts/update.sh)
 ```
 
-### 🔐 Admin Credentials
+### 🔐 Admin Credentials & Password Management
 
 **View current admin email and password**
 ```bash
@@ -38,13 +37,7 @@ sudo grep -s -E "^ADMIN_(EMAIL|PASSWORD)=" /etc/ownmediahost/ownmediahost.env /o
 sudo bash /opt/ownmediahost/scripts/reset-password.sh "YourNewPassword123"
 ```
 
-### 🗑️ Uninstall Platform
-
-```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/nourddinak/OwnMediaHost/main/scripts/uninstall.sh)
-```
-
-### 🛠️ Service Management
+### 🛠️ Daily Service Operations
 
 **View live backend logs**
 ```bash
@@ -66,7 +59,17 @@ sudo systemctl restart ownmediahost
 sudo systemctl reload caddy
 ```
 
-### 💾 Backup & Restore
+**Edit production configuration**
+```bash
+sudo nano /etc/ownmediahost/ownmediahost.env
+```
+
+**Query SQLite database directly**
+```bash
+sqlite3 /var/lib/ownmediahost/storage/database/media.db
+```
+
+### 💾 Backup & Disaster Recovery
 
 **Create atomic backup**
 ```bash
@@ -78,553 +81,395 @@ sudo bash /opt/ownmediahost/scripts/backup.sh /var/backups/ownmediahost
 sudo bash /opt/ownmediahost/scripts/restore.sh /path/to/backup_folder
 ```
 
-### ⚙️ Configuration & Database
-
-**Edit production configuration**
+### 🗑️ Uninstall Platform
 ```bash
-sudo nano /etc/ownmediahost/ownmediahost.env
-```
-
-**Open SQLite database**
-```bash
-sqlite3 /var/lib/ownmediahost/storage/database/media.db
+bash <(curl -fsSL https://raw.githubusercontent.com/nourddinak/OwnMediaHost/main/scripts/uninstall.sh)
 ```
 
 ---
 
-OwnMediaHost gives you a dedicated bare-metal alternative to Cloudinary, ImageKit, Uploadcare, and Imgix with **\*\*zero Docker overhead\*\***:
-
-\- **\*\*Your VPS & Pure Bare-Metal Performance\*\***: Runs natively on your server with direct disk I/O, SIMD image acceleration, and native systemd management.
-
-\- **\*\*Permanent Clean URLs\*\***: Clean permanent links (\`/f/7fd92abc/photo.jpg\`) and stable vanity aliases (\`/a/profile/avatar\`).
-
-\- **\*\*In-Place File Replacement\*\***: Replace media content in-place without altering IDs, permanent URLs, or aliases.
-
-\- **\*\*Browser-Native Canvas & Video Thumbnails\*\***: Ultra-fast video frame and image thumbnail generation directly in the browser using HTML5 \`\<canvas>\` and \`\<video>\` elements—eliminating server-side CPU spikes and heavy external dependencies.
-
-\- **\*\*Pure Rust Image Processing\*\***: High-speed, SIMD-accelerated image scaling and format handling via native Rust libraries with zero external command-line utilities.
-
-\- **\*\*Streaming Media Uploads & Format Whitelisting\*\***: High-throughput streaming multipart uploads with zero disk buffering and no orphan chunks, backed by configurable image and video format whitelists (\`ALLOWED_IMAGE_FORMATS\`, \`ALLOWED_VIDEO_FORMATS\`).
-
-\- **\*\*Private Media & Time-Limited URLs\*\***: Time-limited signed URLs (\`/private/\:public_id?expires=...&signature=...\`).
-
-\- **\*\*Obsidian Dark Dashboard\*\***: Desktop and mobile responsive dashboard with drag-and-drop drawer, video player, and live storage gauges.
-
-\---
-
-**## Architecture**
-
-\`\`\`text
-
-                     Client (Browser, Mobile, CLI, API)
-
-                                     │
-
-                                     ▼
-
-                      Caddy Web Server (Auto-SSL)
-
-                       (Port 80/443, Let's Encrypt)
-
-                                     │
-
-             ┌───────────────────────┴───────────────────────┐
-
-             ▼                                               ▼
-
-      Static SPA Frontend                            Backend API & Media
-
-    (/var/www/ownmediahost/dist)                      (127.0.0.1:8080)
-
-             │                                               │
-
-             │                                   Axum Rust Native Service
-
-             │                                 (systemd: ownmediahost.service)
-
-             │                                               │
-
-             │                               ┌───────────────┴───────────────┐
-
-             │                               ▼                               ▼
-
-             ▼                        SQLite WAL Mode                  File Storage
-
-   React Dashboard SPA               (/var/lib/.../media.db)      (/var/lib/.../storage)
-
-(Apple Obsidian Dark UI)                                          ├── originals/
-
-                                                                  ├── generated/
-
-                                                                  └── temporary/
-
-\`\`\`
-
-\---
-
-**## 1-Click Bare-Metal VPS Deployment Bot**
-
-Deploy the complete platform onto any fresh Ubuntu or Debian VPS in a single command. **\*\*No Docker required.\*\***
-
-**### 1-Line Quick Install**
-
-**\*\*Option A\*\*** — If you are already root (\`sudo -i\` or logged in as root):
-
-\`\`\`bash
-
-bash <(curl -fsSL https\://raw\.githubusercontent.com/nourddinak/OwnMediaHost/main/scripts/deploy.sh)
-
-\`\`\`
-
-**\*\*Option B\*\*** — If you are a regular user with sudo (recommended for most VPS):
-
-\`\`\`bash
-
-curl -fsSL https\://raw\.githubusercontent.com/nourddinak/OwnMediaHost/main/scripts/deploy.sh -o /tmp/deploy.sh && sudo bash /tmp/deploy.sh
-
-\`\`\`
-
-\> **\*\*Note:\*\*** \`sudo bash <(curl ...)\` does not work on Linux because sudo cannot access the process substitution file descriptor. Use Option B instead.
-
-**### What the Deploy Bot Does Automatically:**
-
-1\. **\*\*Self-Bootstrapping\*\***: If executed on a fresh server, it automatically installs \`git\` and \`curl\`, clones the repository into \`/opt/ownmediahost\`, and switches into the project folder.
-
-2\. **\*\*Interactive Configuration Wizard\*\***:
-
-   - Prompts for **\*\*Single Unified Domain\*\*** (e.g. \`media.yourdomain.com\` serving both frontend UI and media streaming APIs) or **\*\*Split Domains\*\*** (\`media.yourdomain.com\` for UI + \`api.yourdomain.com\` for API).
-
-   - Prompts for internal backend port (default: \`8080\`, with active port collision checking).
-
-   - Prompts for persistent storage path (default: \`/var/lib/ownmediahost/storage\`).
-
-   - Prompts for initial administrator email and password (or auto-generates a secure password).
-
-3\. **\*\*Automated Dependency Provisioning\*\***:
-
-   - Installs native system build tools and SQLite3 (\`build-essential\`, \`pkg-config\`, \`libssl-dev\`, \`libsqlite3-dev\`, \`sqlite3\`). No external multimedia CLI binaries required.
-
-   - Checks and installs Node.js v22 (LTS) via official NodeSource repository if missing or \`< v20\`.
-
-   - Checks and installs stable Rust & Cargo via official \`rustup\` if absent.
-
-4\. **\*\*Caddy Reverse Proxy & Automatic SSL\*\***:
-
-   - Installs official Caddy v2 if missing.
-
-   - Backs up your existing \`/etc/caddy/Caddyfile\` with a timestamp.
-
-   - Cleanly injects the reverse-proxy block with unbuffered streaming (\`flush_interval -1\`), routing all \`/api/\*\`, \`/f/\*\`, \`/i/\*\`, \`/a/\*\`, \`/thumbnails/\*\`, and \`/private/\*\` requests to the Axum backend while serving the React dashboard SPA at \`/\` with automatic HTTPS.
-
-5\. **\*\*Instant Precompiled Binary Deployment\*\***:
-
-   - Downloads precompiled, optimized Linux x86_64 Rust release binaries and React dashboard assets directly from GitHub Releases in \~5 seconds (bypassing 15-minute VPS compilation and memory spikes). Seamlessly falls back to local source compilation if requested with \`--build-from-source\` or if offline.
-
-6\. **\*\*Systemd Daemon & Cryptographic Hardening\*\***:
-
-   - Generates five high-entropy 32-byte cryptographic secrets for JWT, Cookies, Pepper, and URL signing keys.
-
-   - Provisions \`/etc/ownmediahost/ownmediahost.env\` with restricted permissions (\`chmod 600\`).
-
-   - Creates dedicated unprivileged system account \`ownmediahost\`.
-
-   - Registers, enables, and launches \`/etc/systemd/system/ownmediahost.service\`.
-
-   - Reloads Caddy with zero downtime.
-
-\---
-
-**## Updating OwnMediaHost**
+OwnMediaHost gives you a dedicated bare-metal alternative to Cloudinary, ImageKit, Uploadcare, and Imgix with **zero Docker overhead**:
+
+- **Your VPS & Pure Bare-Metal Performance**: Runs natively on your server with direct disk I/O, SIMD image acceleration, and native systemd management.
+- **Permanent Clean URLs**: Clean permanent links (`/f/7fd92abc/photo.jpg`) and stable vanity aliases (`/a/profile/avatar`).
+- **In-Place File Replacement**: Replace media content in-place without altering IDs, permanent URLs, or aliases.
+- **Browser-Native Canvas & Video Thumbnails**: Ultra-fast video frame and image thumbnail generation directly in the browser using HTML5 `<canvas>` and `<video>` elements—eliminating server-side CPU spikes and heavy external dependencies.
+- **Pure Rust Image Processing**: High-speed, SIMD-accelerated image scaling and format handling via native Rust libraries with zero external command-line utilities.
+- **Streaming Media Uploads & Format Whitelisting**: High-throughput streaming multipart uploads with zero disk buffering and no orphan chunks, backed by configurable image and video format whitelists (`ALLOWED_IMAGE_FORMATS`, `ALLOWED_VIDEO_FORMATS`).
+- **Private Media & Time-Limited URLs**: Time-limited signed URLs (`/private/:public_id?expires=...&signature=...`).
+- **Obsidian Dark Dashboard**: Desktop and mobile responsive dashboard with drag-and-drop drawer, video player, and live storage gauges.
+
+---
+
+## Architecture
+
+```text
+                      Client (Browser, Mobile, CLI, API)
+                                      │
+                                      ▼
+                         Caddy Web Server (Auto-SSL)
+                         (Port 80/443, Let's Encrypt)
+                                      │
+              ┌───────────────────────┴───────────────────────┐
+              ▼                                               ▼
+       Static SPA Frontend                             Backend API & Media
+     (/var/www/ownmediahost/dist)                       (127.0.0.1:8080)
+              │                                               │
+              │                                      Axum Rust Native Service
+              │                                    (systemd: ownmediahost.service)
+              │                                               │
+              │                               ┌───────────────┴───────────────┐
+              │                               ▼                               ▼
+              ▼                        SQLite WAL Mode                  File Storage
+    React Dashboard SPA                (/var/lib/.../media.db)       (/var/lib/.../storage)
+ (Apple Obsidian Dark UI)                                                 ├── originals/
+                                                                          ├── generated/
+                                                                          └── temporary/
+```
+
+---
+
+## 1-Click Bare-Metal VPS Deployment Bot
+
+Deploy the complete platform onto any fresh Ubuntu or Debian VPS in a single command. **No Docker required.**
+
+### 1-Line Quick Install
+
+**Option A** — If you are already root (`sudo -i` or logged in as root):
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/nourddinak/OwnMediaHost/main/scripts/deploy.sh)
+```
+
+**Option B** — If you are a regular user with sudo (recommended for most VPS):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/nourddinak/OwnMediaHost/main/scripts/deploy.sh -o /tmp/deploy.sh && sudo bash /tmp/deploy.sh
+```
+
+> **Note:** `sudo bash <(curl ...)` does not work on Linux because sudo cannot access the process substitution file descriptor. Use Option B instead.
+
+### What the Deploy Bot Does Automatically:
+
+1. **Self-Bootstrapping**: If executed on a fresh server, it automatically installs `git` and `curl`, clones the repository into `/opt/ownmediahost`, and switches into the project folder.
+2. **Interactive Configuration Wizard**:
+   - Prompts for **Single Unified Domain** (e.g. `media.yourdomain.com` serving both frontend UI and media streaming APIs) or **Split Domains** (`media.yourdomain.com` for UI + `api.yourdomain.com` for API).
+   - Prompts for internal backend port (default: `8080`, with active port collision checking).
+   - Prompts for persistent storage path (default: `/var/lib/ownmediahost/storage`).
+   - Prompts for initial administrator email and password (or auto-generates a secure password).
+3. **Automated Dependency Provisioning**:
+   - Installs native system build tools and SQLite3 (`build-essential`, `pkg-config`, `libssl-dev`, `libsqlite3-dev`, `sqlite3`). No external multimedia CLI binaries required.
+   - Checks and installs Node.js v22 (LTS) via official NodeSource repository if missing or `< v20`.
+   - Checks and installs stable Rust & Cargo via official `rustup` if absent.
+4. **Caddy Reverse Proxy & Automatic SSL**:
+   - Installs official Caddy v2 if missing.
+   - Backs up your existing `/etc/caddy/Caddyfile` with a timestamp.
+   - Cleanly injects the reverse-proxy block with unbuffered streaming (`flush_interval -1`), routing all `/api/*`, `/f/*`, `/a/*`, `/thumbnails/*`, and `/private/*` requests to the Axum backend while serving the React dashboard SPA at `/` with automatic HTTPS.
+5. **Instant Precompiled Binary Deployment**:
+   - Downloads precompiled, optimized Linux x86_64 Rust release binaries and React dashboard assets directly from GitHub Releases in ~5 seconds (bypassing 15-minute VPS compilation and memory spikes). Seamlessly falls back to local source compilation if requested with `--build-from-source` or if offline.
+6. **Systemd Daemon & Cryptographic Hardening**:
+   - Generates five high-entropy 32-byte cryptographic secrets for JWT, Cookies, Pepper, and URL signing keys.
+   - Provisions `/etc/ownmediahost/ownmediahost.env` with restricted permissions (`chmod 600`).
+   - Creates dedicated unprivileged system account `ownmediahost`.
+   - Registers, enables, and launches `/etc/systemd/system/ownmediahost.service`.
+   - Reloads Caddy with zero downtime.
+
+---
+
+## Updating OwnMediaHost
 
 Keep your server up-to-date with the latest features and security improvements.
 
-\`\`\`bash
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/nourddinak/OwnMediaHost/main/scripts/update.sh)
+```
 
-bash <(curl -fsSL https\://raw\.githubusercontent.com/nourddinak/OwnMediaHost/main/scripts/update.sh)
+### What the Updater Does:
+- Pulls the latest commits from Git (`git pull --rebase`).
+- Downloads or recompiles the Rust backend in `--release` mode and updates `/usr/local/bin/ownmediahost-backend`.
+- Refreshes the React dashboard and updates `/var/www/ownmediahost/dist`.
+- Restarts the `ownmediahost.service` systemd daemon with zero config loss and verifies service health.
 
-\`\`\`
+---
 
-**### What the Updater Does:**
-
-\- Pulls the latest commits from Git (\`git pull --rebase\`).
-
-\- Downloads or recompiles the Rust backend in \`--release\` mode and updates \`/usr/local/bin/ownmediahost-backend\`.
-
-\- Refreshes the React dashboard and updates \`/var/www/ownmediahost/dist\`.
-
-\- Restarts the \`ownmediahost.service\` systemd daemon with zero config loss and verifies service health.
-
-\---
-
-**## System Management & Operations**
+## System Management & Operations
 
 Manage your native bare-metal deployment with standard Linux system tools:
 
-\| Action | Command |
+### Service Status & Logs
 
-\| :--- | :--- |
+**Check backend service status**
+```bash
+sudo systemctl status ownmediahost
+```
 
-\| **\*\*Check service status\*\*** | \`sudo systemctl status ownmediahost\` |
+**Stream live backend logs**
+```bash
+sudo journalctl -u ownmediahost -f
+```
 
-\| **\*\*View live logs\*\*** | \`sudo journalctl -u ownmediahost -f\` |
+**Restart backend service**
+```bash
+sudo systemctl restart ownmediahost
+```
 
-\| **\*\*Restart backend service\*\*** | \`sudo systemctl restart ownmediahost\` |
+**Reload Caddy reverse proxy**
+```bash
+sudo systemctl reload caddy
+```
 
-\| **\*\*Reload Caddy reverse proxy\*\*** | \`sudo systemctl reload caddy\` |
+### Configuration & Database
 
-\| **\*\*View current password\*\*** | \`sudo grep -E "^ADMIN\_(EMAIL\\|PASSWORD)=" /etc/ownmediahost/ownmediahost.env\` |
+**Edit production environment variables**
+```bash
+sudo nano /etc/ownmediahost/ownmediahost.env
+```
 
-\| **\*\*Reset admin password\*\*** | \`sudo bash /opt/ownmediahost/scripts/reset-password.sh "NewPassword123"\` |
+**Query SQLite database directly**
+```bash
+sqlite3 /var/lib/ownmediahost/storage/database/media.db
+```
 
-\| **\*\*Uninstall platform\*\*** | \`bash <(curl -fsSL https\://raw\.githubusercontent.com/nourddinak/OwnMediaHost/main/scripts/uninstall.sh)\` |
+### Password Management
 
-\| **\*\*Edit production environment\*\*** | \`sudo nano /etc/ownmediahost/ownmediahost.env\` (then restart service) |
+**View saved administrator credentials**
+```bash
+sudo grep -s -E "^ADMIN_(EMAIL|PASSWORD)=" /etc/ownmediahost/ownmediahost.env /opt/ownmediahost/.env
+```
 
-\| **\*\*Inspect database directly\*\*** | \`sqlite3 /var/lib/ownmediahost/storage/database/media.db\` |
-
-**### Changing / Resetting Administrator Password**
-
-\`\`\`bash
-
-\# 1. View your current saved admin password:
-
-sudo grep -E "^ADMIN\_(EMAIL|PASSWORD)=" /etc/ownmediahost/ownmediahost.env
-
-\# 2. Reset the admin password instantly (re-hashes and updates SQLite database):
-
+**Reset administrator password**
+```bash
 sudo bash /opt/ownmediahost/scripts/reset-password.sh "MyNewSecurePassword2026!"
+```
 
-\`\`\`
+### Complete Platform Uninstallation
 
-**### Complete Bare-Metal Platform Uninstallation**
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/nourddinak/OwnMediaHost/main/scripts/uninstall.sh)
+```
 
-The uninstaller cleanly stops and removes the systemd service, strips Caddy reverse proxy blocks, removes binaries and frontend files, and interactively prompts before touching any media data:
+---
 
-\`\`\`bash
+## Local Development Setup
 
-bash <(curl -fsSL https\://raw\.githubusercontent.com/nourddinak/OwnMediaHost/main/scripts/uninstall.sh)
+### Prerequisites
+- **Rust**: 1.80+ (`cargo`, `rustc`)
+- **Node.js**: v20+ (`npm`)
+- **SQLite3**: Installed on system PATH (or libsqlite3)
 
-\`\`\`
+### 1. Clone & Configure Environment
 
-\---
-
-**## Local Development Setup**
-
-**### Prerequisites**
-
-\- **\*\*Rust\*\***: 1.80+ (\`cargo\`, \`rustc\`)
-
-\- **\*\*Node.js\*\***: v20+ (\`npm\`)
-
-\- **\*\*SQLite3\*\***: Installed on system PATH (or libsqlite3)
-
-**### 1. Clone & Configure Environment**
-
-\`\`\`bash
-
-git clone https\://github.com/nourddinak/OwnMediaHost.git
-
+```bash
+git clone https://github.com/nourddinak/OwnMediaHost.git
 cd OwnMediaHost
-
 cp .env.example .env
+```
 
-\`\`\`
-
-**### 2. Run Backend**
+### 2. Run Backend
 
 The backend initializes the SQLite database in WAL mode, executes migrations, seeds the initial administrator, and launches background cleanup workers:
 
-\`\`\`bash
-
+```bash
 cd backend
-
 cargo run
+```
 
-\`\`\`
+- Backend starts at: `http://127.0.0.1:5002`
+- Swagger API docs at: `http://127.0.0.1:5002/docs`
+- Health check at: `http://127.0.0.1:5002/health/ready`
 
-\- Backend starts at: \`http\://127.0.0.1:5002\`
+### 3. Run Frontend Dashboard
 
-\- Swagger API docs at: \`http\://127.0.0.1:5002/docs\`
-
-\- Health check at: \`http\://127.0.0.1:5002/health/ready\`
-
-**### 3. Run Frontend Dashboard**
-
-\`\`\`bash
-
+```bash
 cd frontend
-
 npm install
-
 npm run dev
+```
 
-\`\`\`
+- Dashboard opens at: `http://localhost:5173`
+- Default development credentials from `.env`:
+  - **Email**: `admin@ownmediahost.local`
+  - **Password**: `AdminSecurePass2026!`
 
-\- Dashboard opens at: \`http\://localhost:5173\`
+---
 
-\- Default development credentials from \`.env\`:
+## Media URLs, Aliases & Format Management
 
-  - **\*\*Email\*\***: \`admin\@ownmediahost.local\`
+### 1. Permanent Media URLs
 
-  - **\*\*Password\*\***: \`AdminSecurePass2026!\`
+```text
+https://media.example.com/f/7fd92abc/photo.jpg
+https://media.example.com/f/v_a8129/video.mp4
+```
 
-\---
-
-**## Media URLs, Aliases & Transformations**
-
-**### 1. Permanent Media URLs**
-
-\`\`\`text
-
-https\://media.example.com/f/7fd92abc/photo.jpg
-
-https\://media.example.com/f/v_a8129/video.mp4
-
-\`\`\`
-
-**### 2. Stable Vanity Aliases**
+### 2. Stable Vanity Aliases
 
 Aliases give you permanent vanity URLs that never change even when replacing the underlying asset:
 
-\`\`\`text
-
-https\://media.example.com/a/profile/avatar
-
-https\://media.example.com/a/branding/logo
-
-\`\`\`
+```text
+https://media.example.com/a/profile/avatar
+https://media.example.com/a/branding/logo
+```
 
 To replace the file behind an alias in-place without changing URLs:
 
-\`\`\`bash
+```bash
+curl -X PUT https://media.example.com/api/v1/files/med_xxx/content \
+  -H "Authorization: Bearer mk_live_xxxx" \
+  -F "file=@new_avatar.png"
+```
 
-curl -X PUT https\://media.example.com/api/v1/files/med_xxx/content \\
+The URL `https://media.example.com/a/profile/avatar` immediately serves the new file!
 
-  -H "Authorization: Bearer mk_live_xxxx" \\
-
-  -F "file=@new_avatar.png"
-
-\`\`\`
-
-The URL \`https\://media.example.com/a/profile/avatar\` immediately serves the new file!
-
-**### 3. Media Format Whitelisting & Ingestion**
+### 3. Media Format Whitelisting & Ingestion
 
 Permitted image and video formats are strictly enforced at ingestion time. Formats can be configured in your environment or dynamically updated in the dashboard Settings:
 
-\`\`\`env
+```env
 ALLOWED_IMAGE_FORMATS=jpeg,png,webp,gif,avif,svg,bmp,ico,tiff,heic
 ALLOWED_VIDEO_FORMATS=mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp,ogv
-\`\`\`
+```
 
-Uploads and replacements with disallowed extensions or mismatched MIME types are rejected with a \`400 Bad Request\` before persisting to disk.
+Uploads and replacements with disallowed extensions or mismatched MIME types are rejected with a `400 Bad Request` before persisting to disk.
 
-**### 4. Private Media & Signed Temporary URLs**
+### 4. Private Media & Signed Temporary URLs
 
 Private assets cannot be accessed without authorization. Generate time-limited signed URLs:
 
-\`\`\`bash
-
-curl -X POST https\://media.example.com/api/v1/files/med_xxx/sign-private \\
-
-  -H "Authorization: Bearer mk_live_xxxx" \\
-
-  -H "Content-Type: application/json" \\
-
-  -d '{"expires_seconds": 3600}'
-
-\`\`\`
+```bash
+curl -X POST https://media.example.com/api/v1/files/med_xxx/sign-private \
+  -H "Authorization: Bearer mk_live_xxxx" \
+  -H "Content-Type: application/json" \
+  -d '{"expires_seconds": 3600}'
+```
 
 Returns:
 
-\`\`\`text
+```text
+https://media.example.com/private/7fd92abc?expires=1726750000&signature=...
+```
 
-https\://media.example.com/private/7fd92abc?expires=1726750000&signature=...
+---
 
-\`\`\`
-
-\---
-
-**## High-Performance Streaming Delivery & Range Requests**
+## High-Performance Streaming Delivery & Range Requests
 
 Media files are streamed directly with zero intermediate full-file RAM buffering:
 
-1\. **\*\*HTTP 200 & HTTP 206 Partial Content\*\***:
+1. **HTTP 200 & HTTP 206 Partial Content**:
+   Streaming delivery supports `Range: bytes=start-end` headers natively. Video scrubbing and resumption work seamlessly in modern web players and mobile streaming clients without holding entire multi-gigabyte media objects in server memory.
 
-   Streaming delivery supports \`Range: bytes=start-end\` headers natively. Video scrubbing and resumption work seamlessly in modern web players and mobile streaming clients without holding entire multi-gigabyte media objects in server memory.
+2. **Zero Orphaned Files**:
+   Uploads stream directly via standard multipart form data. If a client disconnects mid-upload, the TCP connection drops and the Axum stream aborts immediately in memory—leaving zero partial or abandoned files on disk.
 
-2\. **\*\*Zero Orphaned Chunks\*\***:
+---
 
-   Uploads stream directly via standard multipart form data. If a client disconnects mid-upload, the TCP connection drops and the Axum stream aborts immediately—leaving zero partial or abandoned chunks on disk.
+## Developer SDK & API Usage Examples
 
-\---
+### Uploading Files via API
 
-**## Developer SDK & API Usage Examples**
+#### cURL
 
-**### Uploading Files via API**
+```bash
+curl -X POST https://media.example.com/api/v1/files \
+  -H "Authorization: Bearer mk_live_xxxxxxxxxxxxxxxxxxxxxxxx" \
+  -F "file=@photo.jpg" \
+  -F "visibility=public" \
+  -F "alias=gallery/cover"
+```
 
-**#### cURL**
+#### JavaScript / TypeScript
 
-\`\`\`bash
-
-curl -X POST https\://media.example.com/api/v1/files \\
-
-  -H "Authorization: Bearer mk_live_xxxxxxxxxxxxxxxxxxxxxxxx" \\
-
-  -F "file=@photo.jpg" \\
-
-  -F "visibility=public" \\
-
-  -F "alias=gallery/cover"
-
-\`\`\`
-
-**#### JavaScript / TypeScript**
-
-\`\`\`typescript
-
+```typescript
 const form = new FormData();
-
 form.append("file", fileInput.files[0]);
-
 form.append("visibility", "public");
-
 form.append("alias", "profile/avatar");
 
-const res = await fetch("https\://media.example.com/api/v1/files", {
-
-  method: "POST",
-
-  headers: {
-
-    Authorization: \`Bearer ${API_KEY}\`,
-
-  },
-
-  body: form,
-
+const res = await fetch("https://media.example.com/api/v1/files", {
+  method: "POST",
+  headers: {
+    Authorization: `Bearer ${API_KEY}`,
+  },
+  body: form,
 });
 
 const result = await res.json();
-
 console.log("Media URL:", result.data.url);
+```
 
-\`\`\`
+#### Python
 
-**#### Python**
-
-\`\`\`python
-
+```python
 import requests
 
 with open("sample.mp4", "rb") as f:
-
-    res = requests.post(
-
-        "https\://media.example.com/api/v1/files",
-
-        headers={"Authorization": "Bearer mk_live_xxxx"},
-
-        files={"file": f},
-
-        data={"visibility": "public"}
-
-    )
+    res = requests.post(
+        "https://media.example.com/api/v1/files",
+        headers={"Authorization": "Bearer mk_live_xxxx"},
+        files={"file": f},
+        data={"visibility": "public"}
+    )
 
 data = res.json()
-
 print("Permanent URL:", data["data"]["url"])
-
 print("Video Codec:", data["data"]["video_codec"])
-
 print("Duration:", data["data"]["duration"])
+```
 
-\`\`\`
+#### Rust
 
-**#### Rust**
-
-\`\`\`rust
-
+```rust
 use reqwest::multipart::{Form, Part};
 
 let form = Form::new()
-
-    .part("file", Part::bytes(file_bytes).file_name("photo.jpg"));
+    .part("file", Part::bytes(file_bytes).file_name("photo.jpg"));
 
 let client = reqwest::Client::new();
-
 let res = client
-
-    .post("https\://media.example.com/api/v1/files")
-
-    .bearer_auth("mk_live_xxxx")
-
-    .multipart(form)
-
-    .send()
-
-    .await?
-
-    .json::\<serde_json::Value>()
-
-    .await?;
+    .post("https://media.example.com/api/v1/files")
+    .bearer_auth("mk_live_xxxx")
+    .multipart(form)
+    .send()
+    .await?
+    .json::<serde_json::Value>()
+    .await?;
 
 println!("URL: {}", res["data"]["url"]);
+```
 
-\`\`\`
+---
 
-\---
+## Backups & Disaster Recovery
 
-**## Backups & Disaster Recovery**
+### Create Atomic Backup
 
-**### Create Backup**
+```bash
+sudo bash /opt/ownmediahost/scripts/backup.sh /var/backups/ownmediahost
+```
 
-\`\`\`bash
+Creates an atomic copy of `media.db` (safe in SQLite WAL mode) and archives media originals into `originals.tar.gz` with SHA-256 manifest.
 
-chmod +x scripts/backup.sh
+### Restore Backup
 
-./scripts/backup.sh ./backups
+```bash
+sudo bash /opt/ownmediahost/scripts/restore.sh /path/to/backup_folder
+```
 
-\`\`\`
+---
 
-Creates an atomic copy of \`media.db\` (safe in SQLite WAL mode) and archives media originals into \`originals.tar.gz\` with SHA-256 manifest.
-
-**### Restore Backup**
-
-\`\`\`bash
-
-chmod +x scripts/restore.sh
-
-./scripts/restore.sh ./backups/ownmediahost_backup_20260919_120000
-
-\`\`\`
-
-\---
-
-**## Automated Tests**
+## Automated Tests
 
 To execute the backend test suites:
 
-\`\`\`bash
-
-cd backend
-
-cargo test
-
-\`\`\`
+```bash
+cd backend && cargo test
+```
 
 All unit and integration test suites will execute:
-
-\- Password hashing (Argon2id)
-
-\- API key generation and hashing
-
-\- Session token signing and expiry
-
-\- Signed private URL expiration
-
-\- Path traversal prevention
-
-\- Media format whitelisting & MIME type detection
-
-\- High-speed JPEG thumbnail generation
+- Password hashing (Argon2id)
+- API key generation and hashing
+- Session token signing and expiry
+- Signed private URL expiration
+- Path traversal prevention
+- Media format whitelisting & MIME type detection
+- High-speed JPEG thumbnail generation
