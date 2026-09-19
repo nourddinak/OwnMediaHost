@@ -23,6 +23,7 @@ export const App: React.FC = () => {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [selectedFolderId, setSelectedFolderId] = useState<string>('');
 
   const fetchFolders = useCallback(async () => {
     try {
@@ -108,8 +109,6 @@ export const App: React.FC = () => {
   const triggerRefresh = () => {
     setRefreshTrigger((prev) => prev + 1);
   };
-
-  const [selectedFolderId, setSelectedFolderId] = useState<string>('');
 
   const handleSelectView = (view: PageView) => {
     if (view !== 'media') {

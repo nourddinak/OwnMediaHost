@@ -75,12 +75,20 @@ async fn login(
 
     let token = create_session_token(&user.id, &state.config.cookie_secret);
 
-    // Set secure HTTP-only cookie
-    let cookie = format!(
-        "ownmediahost_session={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
-        token,
-        7 * 24 * 60 * 60
-    );
+    let is_secure = state.config.public_base_url.starts_with("https") || state.config.app_env == "production";
+    let cookie = if is_secure {
+        format!(
+            "ownmediahost_session={}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age={}",
+            token,
+            7 * 24 * 60 * 60
+        )
+    } else {
+        format!(
+            "ownmediahost_session={}; Path=/; HttpOnly; SameSite=Lax; Max-Age={}",
+            token,
+            7 * 24 * 60 * 60
+        )
+    };
 
     let mut headers = HeaderMap::new();
     headers.insert(
@@ -102,8 +110,14 @@ async fn login(
 
 async fn logout() -> impl IntoResponse {
     let mut headers = HeaderMap::new();
-    let cookie = "ownmediahost_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0";
-    headers.insert(header::SET_COOKIE, HeaderValue::from_static(cookie));
+    headers.insert(
+        header::SET_COOKIE,
+        HeaderValue::from_static("ownmediahost_session=; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=0"),
+    );
+    headers.append(
+        header::SET_COOKIE,
+        HeaderValue::from_static("ownmediahost_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"),
+    );
     headers.append(
         header::SET_COOKIE,
         HeaderValue::from_static("selfmedia_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0"),

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { api } from '../api/client';
+import { api, setStoredToken } from '../api/client';
 
 interface User {
   id: string;
@@ -39,7 +39,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     checkAuth();
   }, []);
 
-  const login = (_token: string, userData: User) => {
+  const login = (token: string, userData: User) => {
+    setStoredToken(token);
     setUser(userData);
   };
 
@@ -47,6 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       await api.logout();
     } finally {
+      setStoredToken(null);
       setUser(null);
     }
   };

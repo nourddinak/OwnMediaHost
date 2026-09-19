@@ -1,6 +1,6 @@
 use axum::http::{header, Method};
 use std::sync::Arc;
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{AllowOrigin, CorsLayer};
 use tower_http::trace::TraceLayer;
 use tracing::info;
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
@@ -62,13 +62,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             header::HeaderName::from_static("x-request-id"),
         ])
         .allow_credentials(true)
-        .allow_origin(
-            config_arc
-                .allowed_origins
-                .iter()
-                .filter_map(|o| o.parse().ok())
-                .collect::<Vec<_>>(),
-        );
+        .allow_origin(AllowOrigin::predicate({
+            let allowed_origins = config_arc.allowed_origins.clone();
+            move |origin, _| {
+                let origin_str = match origin.to_str() {
+                    Ok(s) => s,
+                    Err(_) => return false,
+                };
+                if allowed_origins.iter().any(|o| {
+                    o == "*"
+                        || o == origin_str
+                        || origin_str.trim_end_matches('/') == o.trim_end_matches('/')
+                }) {
+                    return true;
+                }
+                allowed_origins.iter().any(|o| {
+                    let clean_o = o
+                        .trim_start_matches("https://")
+                        .trim_start_matches("http://")
+                        .trim_end_matches('/');
+                    let clean_orig = origin_str
+                        .trim_start_matches("https://")
+                        .trim_start_matches("http://")
+                        .trim_end_matches('/');
+                    !clean_o.is_empty() && clean_o == clean_orig
+                })
+            }
+        }));
 
     // Build Axum router
     let app = api::create_router(pool.clone(), storage.clone(), config_arc.clone())

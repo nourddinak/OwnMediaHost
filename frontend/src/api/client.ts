@@ -95,11 +95,29 @@ export interface PaginatedResult<T> {
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+const TOKEN_KEY = 'ownmediahost_auth_token';
+
+export function getStoredToken(): string | null {
+  return localStorage.getItem(TOKEN_KEY);
+}
+
+export function setStoredToken(token: string | null): void {
+  if (token) {
+    localStorage.setItem(TOKEN_KEY, token);
+  } else {
+    localStorage.removeItem(TOKEN_KEY);
+  }
+}
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers || {});
   if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
+  }
+
+  const token = getStoredToken();
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
   }
 
   const response = await fetch(`${API_BASE}${endpoint}`, {
@@ -130,13 +148,24 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 
 export const api = {
   // Auth
-  login: (data: { email: string; password: string }) =>
-    request<{ user: { id: string; email: string }; token: string }>('/auth/login', {
+  login: async (data: { email: string; password: string }) => {
+    const res = await request<{ user: { id: string; email: string }; token: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(data),
-    }),
+    });
+    if (res.token) {
+      setStoredToken(res.token);
+    }
+    return res;
+  },
 
-  logout: () => request('/auth/logout', { method: 'POST' }),
+  logout: async () => {
+    try {
+      await request('/auth/logout', { method: 'POST' });
+    } finally {
+      setStoredToken(null);
+    }
+  },
 
   getMe: () => request<{ type: string; user?: { id: string; email: string } }>('/auth/me'),
 

@@ -57,6 +57,8 @@ pub fn create_router(
     let alias_routes = aliases::router(pool.clone(), storage.clone(), config.clone());
 
     Router::new()
+        // Root status endpoint
+        .route("/", get(api_root))
         // Health endpoints
         .route("/health", get(health_check))
         .route("/health/live", get(health_live))
@@ -76,6 +78,17 @@ pub fn create_router(
             state.clone(),
             activity_logging_middleware,
         ))
+}
+
+async fn api_root() -> impl IntoResponse {
+    Json(serde_json::json!({
+        "name": "OwnMediaHost API",
+        "version": env!("CARGO_PKG_VERSION"),
+        "status": "operational",
+        "documentation": "/docs",
+        "health": "/health",
+        "api_v1": "/api/v1"
+    }))
 }
 
 async fn health_check() -> impl IntoResponse {
