@@ -177,33 +177,63 @@ fi
 # Remove legacy binary if present
 as_root rm -f /usr/local/bin/selfmedia-backend 2>/dev/null || true
 
+# Detect topology and domains from environment
+ENV_ACTIVE="/etc/ownmediahost/ownmediahost.env"
+if [ ! -f "$ENV_ACTIVE" ] && [ -f /etc/selfmedia/selfmedia.env ]; then
+    ENV_ACTIVE="/etc/selfmedia/selfmedia.env"
+fi
+
+DEPLOY_MODE="unified"
+FRONTEND_DOMAIN=""
+BACKEND_DOMAIN=""
+caddy_domain=""
+
+if [ -f "$ENV_ACTIVE" ]; then
+    DEPLOY_MODE=$(as_root grep "^DEPLOY_MODE=" "$ENV_ACTIVE" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || echo "")
+    FRONTEND_DOMAIN=$(as_root grep "^FRONTEND_DOMAIN=" "$ENV_ACTIVE" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || echo "")
+    BACKEND_DOMAIN=$(as_root grep "^BACKEND_DOMAIN=" "$ENV_ACTIVE" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || echo "")
+    public_url=$(as_root grep "^PUBLIC_BASE_URL=" "$ENV_ACTIVE" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || echo "")
+    caddy_domain=$(echo "$public_url" | sed -e 's|^[^/]*//||' -e 's|/.*$||' -e 's|:[0-9]*$||')
+
+    if [ "$DEPLOY_MODE" != "split" ] && [ -n "$FRONTEND_DOMAIN" ] && [ -n "$BACKEND_DOMAIN" ]; then
+        DEPLOY_MODE="split"
+    fi
+fi
+
 # 2. Update frontend
 log_info "Updating React frontend dashboard..."
 frontend_updated=false
-release_frontend_url="https://github.com/nourddinak/OwnMediaHost/releases/latest/download/ownmediahost-frontend-dist.tar.gz"
-tmp_front_tar="/tmp/ownmediahost-frontend-dist.tar.gz"
-as_root rm -f "$tmp_front_tar"
 
-if curl -fsSL -o "$tmp_front_tar" "$release_frontend_url" 2>/dev/null && [ -s "$tmp_front_tar" ]; then
-    as_root mkdir -p /var/www/ownmediahost/dist
-    if as_root tar -xzf "$tmp_front_tar" -C /var/www/ownmediahost/dist 2>/dev/null; then
-        as_root chown -R www-data:www-data /var/www/ownmediahost 2>/dev/null || true
-        as_root rm -f "$tmp_front_tar"
-        log_success "Instant update: Precompiled frontend dashboard assets refreshed."
-        frontend_updated=true
+# If unified mode, try downloading precompiled frontend bundle first
+if [[ "$DEPLOY_MODE" != "split" ]]; then
+    release_frontend_url="https://github.com/nourddinak/OwnMediaHost/releases/latest/download/ownmediahost-frontend-dist.tar.gz"
+    tmp_front_tar="/tmp/ownmediahost-frontend-dist.tar.gz"
+    as_root rm -f "$tmp_front_tar"
+
+    if curl -fsSL -o "$tmp_front_tar" "$release_frontend_url" 2>/dev/null && [ -s "$tmp_front_tar" ]; then
+        as_root mkdir -p /var/www/ownmediahost/dist
+        if as_root tar -xzf "$tmp_front_tar" -C /var/www/ownmediahost/dist 2>/dev/null; then
+            as_root chown -R www-data:www-data /var/www/ownmediahost 2>/dev/null || true
+            as_root rm -f "$tmp_front_tar"
+            log_success "Instant update: Precompiled frontend dashboard assets refreshed."
+            frontend_updated=true
+        fi
     fi
 fi
 
 if [[ "$frontend_updated" != true ]]; then
-    log_info "Precompiled frontend not reachable. Building from source..."
+    log_info "Building frontend dashboard from source..."
     cd "${REPO_DIR}/frontend"
-    if [ ! -f .env.production ]; then
-        cat > .env.production << 'EOF'
-VITE_API_BASE_URL=/api/v1
+    local_api_base="/api/v1"
+    if [[ "$DEPLOY_MODE" == "split" && -n "$BACKEND_DOMAIN" ]]; then
+        local_api_base="https://${BACKEND_DOMAIN}/api/v1"
+        log_info "Split domain detected: Baking VITE_API_BASE_URL=${local_api_base} into frontend build"
+    fi
+    cat > .env.production << EOF
+VITE_API_BASE_URL=${local_api_base}
 VITE_APP_NAME=OwnMediaHost
 VITE_APP_VERSION=0.1.0
 EOF
-    fi
     as_root npm install
     as_root npm run build
     as_root mkdir -p /var/www/ownmediahost/dist
@@ -227,21 +257,38 @@ if have sqlite3; then
 fi
 
 # 4. Synchronize Caddy Reverse Proxy & SPA Routing
-ENV_ACTIVE="/etc/ownmediahost/ownmediahost.env"
-if [ ! -f "$ENV_ACTIVE" ] && [ -f /etc/selfmedia/selfmedia.env ]; then
-    ENV_ACTIVE="/etc/selfmedia/selfmedia.env"
-fi
-
 if [ -f /etc/caddy/Caddyfile ] && [ -f "$ENV_ACTIVE" ]; then
     log_info "Synchronizing Caddy reverse proxy routing..."
     caddy_port=$(as_root grep "^APP_PORT=" "$ENV_ACTIVE" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || echo "5002")
     [ -z "$caddy_port" ] && caddy_port="5002"
-    public_url=$(as_root grep "^PUBLIC_BASE_URL=" "$ENV_ACTIVE" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || echo "")
-    caddy_domain=$(echo "$public_url" | sed -e 's|^[^/]*//||' -e 's|/.*$||' -e 's|:[0-9]*$||')
 
-    if [ -n "$caddy_domain" ]; then
-        as_root sed -i '/# >>> OwnMediaHost block >>>/,/# <<< OwnMediaHost block <<</d' /etc/caddy/Caddyfile
-        as_root sed -i '/# >>> SELFmedia block >>>/,/# <<< SELFmedia block <<</d' /etc/caddy/Caddyfile
+    as_root sed -i '/# >>> OwnMediaHost block >>>/,/# <<< OwnMediaHost block <<</d' /etc/caddy/Caddyfile
+    as_root sed -i '/# >>> SELFmedia block >>>/,/# <<< SELFmedia block <<</d' /etc/caddy/Caddyfile
+
+    if [[ "$DEPLOY_MODE" == "split" && -n "$FRONTEND_DOMAIN" && -n "$BACKEND_DOMAIN" ]]; then
+        cat << EOF | as_root tee -a /etc/caddy/Caddyfile >/dev/null
+
+# >>> OwnMediaHost block >>>
+${FRONTEND_DOMAIN} {
+    encode gzip zstd
+    root * /var/www/ownmediahost/dist
+    try_files {path} /index.html
+    file_server
+}
+
+${BACKEND_DOMAIN} {
+    encode gzip zstd
+    request_body {
+        max_size 10GB
+    }
+    reverse_proxy 127.0.0.1:${caddy_port} {
+        flush_interval -1
+    }
+}
+# <<< OwnMediaHost block <<<
+EOF
+        log_info "Synchronized 2-domain split Caddy routing (${FRONTEND_DOMAIN} -> UI, ${BACKEND_DOMAIN} -> API)."
+    elif [ -n "$caddy_domain" ]; then
         cat << EOF | as_root tee -a /etc/caddy/Caddyfile >/dev/null
 
 # >>> OwnMediaHost block >>>
@@ -266,10 +313,12 @@ ${caddy_domain} {
 }
 # <<< OwnMediaHost block <<<
 EOF
-        if as_root caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
-            as_root systemctl reload caddy || as_root systemctl restart caddy
-            log_success "Caddy reverse proxy reloaded with handle-isolated SPA routing."
-        fi
+        log_info "Synchronized unified domain Caddy routing (${caddy_domain})."
+    fi
+
+    if as_root caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then
+        as_root systemctl reload caddy || as_root systemctl restart caddy
+        log_success "Caddy reverse proxy reloaded successfully."
     fi
 fi
 

@@ -823,6 +823,12 @@ MEDIA_ROOT=${STORAGE_DIR}
 PUBLIC_BASE_URL=${public_url}
 ALLOWED_ORIGINS=${allowed_origins}
 
+# Topology & Domains
+DEPLOY_MODE=${DEPLOY_MODE}
+DOMAIN=${DOMAIN:-}
+FRONTEND_DOMAIN=${FRONTEND_DOMAIN:-}
+BACKEND_DOMAIN=${BACKEND_DOMAIN:-}
+
 # Cryptographic Keys (Auto-generated high-entropy secrets)
 JWT_SECRET=${jwt_sec}
 COOKIE_SECRET=${cookie_sec}
