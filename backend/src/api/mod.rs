@@ -113,16 +113,26 @@ async fn api_v1_root() -> impl IntoResponse {
 }
 
 async fn health_check() -> impl IntoResponse {
-    Json(ApiResponse::ok("OwnMediaHost is healthy"))
+    (
+        [(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")],
+        Json(ApiResponse::ok("OwnMediaHost is healthy")),
+    )
 }
 
 async fn health_live() -> impl IntoResponse {
-    (StatusCode::OK, "live")
+    (
+        StatusCode::OK,
+        [(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")],
+        "live",
+    )
 }
 
 async fn health_ready(state: AppState) -> Result<impl IntoResponse, AppError> {
     let _ = sqlx::query("SELECT 1").execute(&state.pool).await?;
-    Ok(Json(ApiResponse::ok("ready")))
+    Ok((
+        [(axum::http::header::ACCESS_CONTROL_ALLOW_ORIGIN, "*")],
+        Json(ApiResponse::ok("ready")),
+    ))
 }
 
 async fn activity_logging_middleware(

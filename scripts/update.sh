@@ -59,17 +59,25 @@ TARGET_INSTALL_DIR="/opt/ownmediahost"
 REPO_DIR="${TARGET_INSTALL_DIR}"
 
 BUILD_FROM_SOURCE=false
-for arg in "$@"; do
-    case "$arg" in
+STATUS_DOMAIN_CLI=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
         --build-from-source|-b)
             BUILD_FROM_SOURCE=true
+            shift
+            ;;
+        --status-domain)
+            STATUS_DOMAIN_CLI="$2"
+            shift 2
             ;;
         -*)
+            shift
             ;;
         *)
-            if [ -d "$arg" ]; then
-                REPO_DIR="$arg"
+            if [ -d "$1" ]; then
+                REPO_DIR="$1"
             fi
+            shift
             ;;
     esac
 done
@@ -204,14 +212,25 @@ fi
 DEPLOY_MODE="unified"
 FRONTEND_DOMAIN=""
 BACKEND_DOMAIN=""
+STATUS_DOMAIN=""
 caddy_domain=""
 
 if [ -f "$ENV_ACTIVE" ]; then
     DEPLOY_MODE=$(as_root grep "^DEPLOY_MODE=" "$ENV_ACTIVE" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || echo "")
     FRONTEND_DOMAIN=$(as_root grep "^FRONTEND_DOMAIN=" "$ENV_ACTIVE" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || echo "")
     BACKEND_DOMAIN=$(as_root grep "^BACKEND_DOMAIN=" "$ENV_ACTIVE" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || echo "")
+    STATUS_DOMAIN=$(as_root grep "^STATUS_DOMAIN=" "$ENV_ACTIVE" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || echo "")
     public_url=$(as_root grep "^PUBLIC_BASE_URL=" "$ENV_ACTIVE" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || echo "")
     caddy_domain=$(echo "$public_url" | sed -e 's|^[^/]*//||' -e 's|/.*$||' -e 's|:[0-9]*$||')
+
+    if [ -n "$STATUS_DOMAIN_CLI" ]; then
+        STATUS_DOMAIN="$STATUS_DOMAIN_CLI"
+        if as_root grep -q "^STATUS_DOMAIN=" "$ENV_ACTIVE" 2>/dev/null; then
+            as_root sed -i "s|^STATUS_DOMAIN=.*|STATUS_DOMAIN=${STATUS_DOMAIN}|" "$ENV_ACTIVE"
+        else
+            echo "STATUS_DOMAIN=${STATUS_DOMAIN}" | as_root tee -a "$ENV_ACTIVE" >/dev/null
+        fi
+    fi
 
     if [ "$DEPLOY_MODE" != "split" ] && [ -n "$FRONTEND_DOMAIN" ] && [ -n "$BACKEND_DOMAIN" ]; then
         DEPLOY_MODE="split"
@@ -260,6 +279,15 @@ EOF
     log_success "Frontend assets refreshed (production build)."
 fi
 
+# 2b. Synchronize Public Status Page Assets
+if [ -d "${REPO_DIR}/status" ]; then
+    log_info "Synchronizing public status page assets..."
+    as_root mkdir -p /var/www/ownmediahost/status
+    as_root cp -rf "${REPO_DIR}/status/"* /var/www/ownmediahost/status/
+    as_root chown -R www-data:www-data /var/www/ownmediahost/status 2>/dev/null || true
+    log_success "Public status page assets refreshed."
+fi
+
 # 3. Verify Database CLI & Media Engine
 log_info "Verifying database and media engine..."
 log_success "Media engine operational: Browser HTML5 Canvas & Pure Rust (Zero external dependencies)"
@@ -293,6 +321,13 @@ if [ -f /etc/caddy/Caddyfile ] && [ -f "$ENV_ACTIVE" ]; then
 # ==============================================================================
 ${FRONTEND_DOMAIN} {
     encode gzip zstd
+
+    handle_path /status* {
+        root * /var/www/ownmediahost/status
+        file_server
+        try_files {path} /index.html
+    }
+
     root * /var/www/ownmediahost/dist
     try_files {path} /index.html
     file_server
@@ -329,6 +364,12 @@ ${caddy_domain} {
         }
     }
 
+    handle_path /status* {
+        root * /var/www/ownmediahost/status
+        file_server
+        try_files {path} /index.html
+    }
+
     handle {
         root * /var/www/ownmediahost/dist
         try_files {path} /index.html
@@ -338,6 +379,23 @@ ${caddy_domain} {
 # ============================ End OwnMediaHost ================================
 EOF
         log_info "Synchronized unified domain Caddy routing (${caddy_domain})."
+    fi
+
+    if [ -n "$STATUS_DOMAIN" ]; then
+        cat << EOF | as_root tee -a /etc/caddy/Caddyfile >/dev/null
+
+# ============================== Status Page ===================================
+# ${STATUS_DOMAIN}   {static status}
+# ==============================================================================
+${STATUS_DOMAIN} {
+    encode gzip zstd
+    root * /var/www/ownmediahost/status
+    file_server
+    try_files {path} /index.html
+}
+# ============================ End Status Page =================================
+EOF
+        log_info "Synchronized decoupled status page Caddy routing (${STATUS_DOMAIN})."
     fi
 
     if as_root caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then

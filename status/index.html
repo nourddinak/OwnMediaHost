@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>OwnMediaHost — System Status</title>
+  <meta name="description" content="Live operational status, uptime telemetry, and incident updates for OwnMediaHost.">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%236366f1'><path d='M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5'/></svg>">
+  <link rel="stylesheet" href="status.css">
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Header -->
+    <header class="status-header">
+      <div class="header-content">
+        <div class="brand">
+          <div class="brand-icon">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+              <polyline points="2 17 12 22 22 17"></polyline>
+              <polyline points="2 12 12 17 22 12"></polyline>
+            </svg>
+          </div>
+          <div class="brand-text">
+            <h1>OwnMediaHost</h1>
+            <span class="brand-subtitle">System Status &amp; Incident Communication</span>
+          </div>
+        </div>
+
+        <div class="header-actions">
+          <div class="poll-timer" id="poll-timer">
+            <span class="poll-label">Next probe:</span>
+            <span class="poll-countdown" id="poll-countdown">30s</span>
+            <div class="poll-progress"><div class="poll-bar" id="poll-bar"></div></div>
+          </div>
+          <button class="btn-refresh" id="btn-refresh" title="Run manual probe now" aria-label="Refresh Status">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" class="refresh-icon" id="refresh-icon">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+            </svg>
+            <span>Refresh</span>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="status-main">
+      <!-- Big Status Banner -->
+      <section class="banner-section">
+        <div class="system-status-banner status-loading" id="system-status-banner">
+          <div class="status-badge-halo">
+            <span class="status-dot"></span>
+          </div>
+          <div class="banner-text">
+            <h2 class="status-headline" id="status-headline">Probing System Telemetry...</h2>
+            <p class="status-description" id="status-description">Connecting to application health endpoints and telemetry monitors...</p>
+          </div>
+          <div class="banner-metrics" id="banner-metrics">
+            <div class="metric-item">
+              <span class="metric-label">Latency</span>
+              <span class="metric-value" id="metric-latency">-- ms</span>
+            </div>
+            <div class="metric-item">
+              <span class="metric-label">Last Probe</span>
+              <span class="metric-value" id="metric-checked">Just now</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Active Incidents / Notices (Dynamic) -->
+      <section class="incidents-section" id="incidents-section" style="display: none;">
+        <div class="section-header">
+          <h3>Active Incidents &amp; Maintenance</h3>
+          <span class="section-tag" id="incident-count-tag">1 Active</span>
+        </div>
+        <div class="incidents-list" id="incidents-list">
+          <!-- Populated dynamically by status.js -->
+        </div>
+      </section>
+
+      <!-- Subsystems Health Grid -->
+      <section class="subsystems-section">
+        <div class="section-header">
+          <h3>Subsystems &amp; Services</h3>
+          <span class="section-subtext">Real-time status of all architectural components</span>
+        </div>
+
+        <div class="services-grid">
+          <!-- Web Dashboard & Frontend -->
+          <div class="service-card" id="service-web">
+            <div class="service-header">
+              <div class="service-meta">
+                <div class="service-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                    <line x1="8" y1="21" x2="16" y2="21"></line>
+                    <line x1="12" y1="17" x2="12" y2="21"></line>
+                  </svg>
+                </div>
+                <div class="service-info">
+                  <h4>Web Dashboard &amp; SPA</h4>
+                  <span class="service-desc">React Single Page App &amp; Static Assets</span>
+                </div>
+              </div>
+              <div class="service-status-pill status-operational" id="pill-web">
+                <span class="dot"></span>
+                <span class="pill-text">Operational</span>
+              </div>
+            </div>
+            <div class="service-detail">
+              <span class="detail-label">Routing</span>
+              <span class="detail-val">Edge CDN / Caddy Static</span>
+            </div>
+          </div>
+
+          <!-- API & Upload Gateway -->
+          <div class="service-card" id="service-api">
+            <div class="service-header">
+              <div class="service-meta">
+                <div class="service-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 14a4 4 0 0 1 0-8 5 5 0 0 1 9.5-1.5 4 4 0 0 1 5.5 5 3 3 0 0 1 1 5.5"></path>
+                    <polyline points="16 16 12 12 8 16"></polyline>
+                    <line x1="12" y1="12" x2="12" y2="21"></line>
+                  </svg>
+                </div>
+                <div class="service-info">
+                  <h4>API Gateway &amp; Uploads</h4>
+                  <span class="service-desc">Axum Engine &amp; REST v1 Router</span>
+                </div>
+              </div>
+              <div class="service-status-pill status-operational" id="pill-api">
+                <span class="dot"></span>
+                <span class="pill-text">Operational</span>
+              </div>
+            </div>
+            <div class="service-detail">
+              <span class="detail-label">Endpoint</span>
+              <span class="detail-val">/health &amp; /api/v1</span>
+            </div>
+          </div>
+
+          <!-- Media Streaming & Thumbnail Pipeline -->
+          <div class="service-card" id="service-media">
+            <div class="service-header">
+              <div class="service-meta">
+                <div class="service-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                    <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                  </svg>
+                </div>
+                <div class="service-info">
+                  <h4>Media Streaming &amp; CDN</h4>
+                  <span class="service-desc">Range-request streaming &amp; SIMD processing</span>
+                </div>
+              </div>
+              <div class="service-status-pill status-operational" id="pill-media">
+                <span class="dot"></span>
+                <span class="pill-text">Operational</span>
+              </div>
+            </div>
+            <div class="service-detail">
+              <span class="detail-label">Pipeline</span>
+              <span class="detail-val">Pure Rust &amp; Browser Canvas</span>
+            </div>
+          </div>
+
+          <!-- Database & Storage Engine -->
+          <div class="service-card" id="service-db">
+            <div class="service-header">
+              <div class="service-meta">
+                <div class="service-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
+                    <path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
+                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
+                  </svg>
+                </div>
+                <div class="service-info">
+                  <h4>Database &amp; Storage Engine</h4>
+                  <span class="service-desc">SQLite WAL &amp; Local Media Store</span>
+                </div>
+              </div>
+              <div class="service-status-pill status-operational" id="pill-db">
+                <span class="dot"></span>
+                <span class="pill-text">Operational</span>
+              </div>
+            </div>
+            <div class="service-detail">
+              <span class="detail-label">Readiness Probe</span>
+              <span class="detail-val">/health/ready</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Incident History -->
+      <section class="history-section">
+        <div class="section-header">
+          <h3>Incident History</h3>
+          <span class="section-subtext">Past incidents and post-mortems</span>
+        </div>
+        <div class="history-list" id="history-list">
+          <!-- Populated dynamically by status.js -->
+        </div>
+      </section>
+
+      <!-- Host Decoupling Notice & Architecture Details -->
+      <section class="architecture-notice">
+        <div class="notice-card">
+          <div class="notice-icon">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+          </div>
+          <div class="notice-content">
+            <h4>Decoupled Incident Infrastructure</h4>
+            <p>This status dashboard is physically and logically decoupled from the primary application server. It serves static telemetry and incident updates completely independently, ensuring transparent uptime reporting even during major host outages or scheduled maintenance.</p>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="status-footer">
+      <div class="footer-content">
+        <div class="footer-left">
+          <span>&copy; <span id="current-year"></span> OwnMediaHost &bull; Out-of-Band Incident Communication</span>
+        </div>
+        <div class="footer-links">
+          <a href="/" target="_blank" rel="noopener" id="link-main-app">Main App</a>
+          <a href="/health" target="_blank" rel="noopener" id="link-health">Health Endpoint</a>
+          <a href="https://github.com/nourddinak/OwnMediaHost" target="_blank" rel="noopener">GitHub</a>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <script src="status.js"></script>
+</body>
+</html>

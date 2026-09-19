@@ -1,0 +1,24 @@
+{
+  "api_endpoint": "",
+  "incidents": [],
+  "past_incidents": [
+    {
+      "id": "inc-2026-09-01",
+      "title": "Scheduled Storage Engine Maintenance & WAL Optimization",
+      "severity": "minor",
+      "date": "September 15, 2026",
+      "summary": "Completed scheduled SQLite WAL index maintenance and image processing engine upgrades. All storage volumes verified healthy with zero data degradation.",
+      "duration": "12 minutes",
+      "status": "resolved"
+    },
+    {
+      "id": "inc-2026-08-18",
+      "title": "Brief API Latency Spike during Video Transcoding Peak",
+      "severity": "minor",
+      "date": "August 18, 2026",
+      "summary": "Identified CPU throttling during simultaneous 4K video transcoding jobs. Increased background job worker queue concurrency limits. Latencies returned to nominal < 40ms.",
+      "duration": "8 minutes",
+      "status": "resolved"
+    }
+  ]
+}

@@ -92,12 +92,12 @@ OwnMediaHost gives you a dedicated bare-metal alternative to Cloudinary, ImageKi
 
 - **Your VPS & Pure Bare-Metal Performance**: Runs natively on your server with direct disk I/O, SIMD image acceleration, and native systemd management.
 - **Permanent Clean URLs**: Clean permanent links (`/f/7fd92abc/photo.jpg`) and stable vanity aliases (`/a/profile/avatar`).
-- **In-Place File Replacement**: Replace media content in-place without altering IDs, permanent URLs, or aliases.
+- **Decoupled Incident Communication & Status Page**: Out-of-band public status dashboard (`/status` or `status.domain.com`) that stays online even during primary backend downtime, with live health probing and real-time incident feeds.
 - **Browser-Native Canvas & Video Thumbnails**: Ultra-fast video frame and image thumbnail generation directly in the browser using HTML5 `<canvas>` and `<video>` elements—eliminating server-side CPU spikes and heavy external dependencies.
 - **Pure Rust Image Processing**: High-speed, SIMD-accelerated image scaling and format handling via native Rust libraries with zero external command-line utilities.
 - **Streaming Media Uploads & Format Whitelisting**: High-throughput streaming multipart uploads with zero disk buffering and no orphan chunks, backed by configurable image and video format whitelists (`ALLOWED_IMAGE_FORMATS`, `ALLOWED_VIDEO_FORMATS`).
 - **Private Media & Time-Limited URLs**: Time-limited signed URLs (`/private/:public_id?expires=...&signature=...`).
-- **Obsidian Dark Dashboard**: Desktop and mobile responsive dashboard with drag-and-drop drawer, video player, and live storage gauges.
+- **Obsidian Dark Dashboard**: Desktop and mobile responsive dashboard with multi-file selection (Ctrl/Shift-click), drag-and-drop drawer, video player, and live storage gauges.
 
 ---
 
@@ -110,21 +110,19 @@ OwnMediaHost gives you a dedicated bare-metal alternative to Cloudinary, ImageKi
                          Caddy Web Server (Auto-SSL)
                          (Port 80/443, Let's Encrypt)
                                       │
-              ┌───────────────────────┴───────────────────────┐
-              ▼                                               ▼
-       Static SPA Frontend                             Backend API & Media
-     (/var/www/ownmediahost/dist)                       (127.0.0.1:8080)
-              │                                               │
-              │                                      Axum Rust Native Service
-              │                                    (systemd: ownmediahost.service)
-              │                                               │
-              │                               ┌───────────────┴───────────────┐
-              │                               ▼                               ▼
-              ▼                        SQLite WAL Mode                  File Storage
-    React Dashboard SPA                (/var/lib/.../media.db)       (/var/lib/.../storage)
- (Apple Obsidian Dark UI)                                                 ├── originals/
-                                                                          ├── generated/
-                                                                          └── temporary/
+       ┌──────────────────────────────┼──────────────────────────────┐
+       ▼                              ▼                              ▼
+Static SPA Frontend          Decoupled Status Page          Backend API & Media
+(/var/www/.../dist)          (/var/www/.../status)            (127.0.0.1:8080)
+       │                              │                              │
+       │                              │                     Axum Rust Native Service
+       │                              │                  (systemd: ownmediahost.service)
+       │                              │                              │
+       │                              │                     ┌────────┴────────┐
+       │                              │                     ▼                 ▼
+       ▼                              ▼               SQLite WAL Mode    File Storage
+React Dashboard SPA          Public Status Page       (/var/lib/media.db) (/var/lib/storage)
+(Apple Obsidian Dark UI)     (Zero-Dependency Telemetry)
 ```
 
 ---
