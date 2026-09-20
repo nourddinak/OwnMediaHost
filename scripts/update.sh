@@ -515,8 +515,13 @@ ${BACKEND_DOMAIN} {
         respond "" 204
     }
 
-    reverse_proxy 127.0.0.1:${caddy_port} {
-        flush_interval -1
+    handle {
+        header Access-Control-Allow-Origin "{header.Origin}"
+        header Access-Control-Allow-Credentials "true"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, Accept, Range, Origin, Cookie, X-Request-Id, X-Api-Key"
+        reverse_proxy 127.0.0.1:${caddy_port} {
+            flush_interval -1
+        }
     }
 }
 # ============================ End OwnMediaHost ================================
@@ -607,7 +612,8 @@ fi
 update_storage="${MEDIA_ROOT:-/var/lib/ownmediahost/storage}"
 trigger_file="${update_storage}/update.trigger"
 log_file="${update_storage}/update.log"
-as_root touch "${trigger_file}" "${log_file}" 2>/dev/null || true
+as_root rm -f "${trigger_file}" 2>/dev/null || true
+as_root touch "${log_file}" 2>/dev/null || true
 as_root chown -R ownmediahost:ownmediahost "${update_storage}" 2>/dev/null || true
 
 as_root tee /etc/systemd/system/ownmediahost-update.path >/dev/null << EOF

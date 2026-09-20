@@ -6,6 +6,16 @@ const cleanHost = (val: string) => {
   return val.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/:[0-9]+$/, '');
 };
 
+const computeDefaultBackendDomain = (host: string): string => {
+  const clean = cleanHost(host);
+  if (!clean) return '';
+  const parts = clean.split('.');
+  if (parts.length > 2) {
+    return ['api', ...parts.slice(1)].join('.');
+  }
+  return `api.${clean}`;
+};
+
 export const SettingsPage: React.FC = () => {
   const { toast } = useToast();
   const [settings, setSettings] = useState<Record<string, string>>({});
@@ -69,7 +79,7 @@ export const SettingsPage: React.FC = () => {
         } else {
           const dom = cleanHost(prev['domain'] || prev['frontend_domain'] || defaultHost);
           updated['frontend_domain'] = prev['frontend_domain'] || dom;
-          updated['backend_domain'] = prev['backend_domain'] || `api.${dom}`;
+          updated['backend_domain'] = prev['backend_domain'] || computeDefaultBackendDomain(dom);
           updated['public_base_url'] = `https://${updated['backend_domain']}`;
         }
       } else if (key === 'domain') {
@@ -100,7 +110,7 @@ export const SettingsPage: React.FC = () => {
       finalSettings['backend_domain'] = '';
     } else {
       finalSettings['frontend_domain'] = cleanFrontend || cleanDom;
-      finalSettings['backend_domain'] = cleanBackend || `api.${cleanDom}`;
+      finalSettings['backend_domain'] = cleanBackend || computeDefaultBackendDomain(cleanDom);
       finalSettings['domain'] = cleanFrontend || cleanDom;
       finalSettings['public_base_url'] = `https://${finalSettings['backend_domain']}`;
     }
@@ -210,7 +220,7 @@ export const SettingsPage: React.FC = () => {
   const rawDomain = settings['domain'] || settings['frontend_domain'] || defaultHost;
   const cleanUnifiedDomain = cleanHost(rawDomain) || defaultHost;
   const cleanFrontendDomain = cleanHost(settings['frontend_domain'] || '') || cleanUnifiedDomain;
-  const cleanBackendDomain = cleanHost(settings['backend_domain'] || '') || `api.${cleanFrontendDomain}`;
+  const cleanBackendDomain = cleanHost(settings['backend_domain'] || '') || computeDefaultBackendDomain(cleanFrontendDomain);
 
   const autoBaseUrl = deployMode === 'unified'
     ? `https://${cleanUnifiedDomain}`

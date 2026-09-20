@@ -973,7 +973,8 @@ EOF
     # Provision background update trigger watcher (allows 1-click update from webapp safely)
     local trigger_file="${STORAGE_DIR}/update.trigger"
     local log_file="${STORAGE_DIR}/update.log"
-    as_root touch "${trigger_file}" "${log_file}" 2>/dev/null || true
+    as_root rm -f "${trigger_file}" 2>/dev/null || true
+    as_root touch "${log_file}" 2>/dev/null || true
     as_root chown -R ownmediahost:ownmediahost "${STORAGE_DIR}" 2>/dev/null || true
 
     as_root tee /etc/systemd/system/ownmediahost-update.path >/dev/null << EOF
@@ -1108,8 +1109,13 @@ ${BACKEND_DOMAIN} {
         respond "" 204
     }
 
-    reverse_proxy 127.0.0.1:${BACKEND_PORT} {
-        flush_interval -1
+    handle {
+        header Access-Control-Allow-Origin "{header.Origin}"
+        header Access-Control-Allow-Credentials "true"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, Accept, Range, Origin, Cookie, X-Request-Id, X-Api-Key"
+        reverse_proxy 127.0.0.1:${BACKEND_PORT} {
+            flush_interval -1
+        }
     }
 }
 # ============================ End OwnMediaHost ================================

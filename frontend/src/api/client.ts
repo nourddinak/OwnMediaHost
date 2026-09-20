@@ -123,17 +123,57 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-    credentials: 'include',
-  });
+  let response: Response;
+  const isCrossOrigin =
+    typeof window !== 'undefined' &&
+    API_BASE.startsWith('http') &&
+    !API_BASE.includes(window.location.host);
+
+  try {
+    response = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+      credentials: 'include',
+    });
+  } catch (netErr: any) {
+    if (isCrossOrigin) {
+      try {
+        response = await fetch(`/api/v1${endpoint}`, {
+          ...options,
+          headers,
+          credentials: 'include',
+        });
+      } catch {
+        throw netErr;
+      }
+    } else {
+      throw netErr;
+    }
+  }
 
   const contentType = response.headers.get('content-type') || '';
   let json: any;
   if (contentType.includes('application/json')) {
     json = await response.json();
   } else {
+    // If cross-origin returned non-JSON (e.g. Caddy routing or SSL error), attempt same-origin fallback
+    if (isCrossOrigin) {
+      try {
+        const fallbackRes = await fetch(`/api/v1${endpoint}`, {
+          ...options,
+          headers,
+          credentials: 'include',
+        });
+        const fbContentType = fallbackRes.headers.get('content-type') || '';
+        if (fbContentType.includes('application/json')) {
+          const fbJson = await fallbackRes.json();
+          if (fallbackRes.ok && fbJson.success !== false) {
+            return fbJson.data !== undefined ? fbJson.data : (fbJson as T);
+          }
+        }
+      } catch {}
+    }
+
     const text = await response.text();
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText || text.slice(0, 100)}`);
@@ -146,7 +186,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     throw new Error(errorMsg);
   }
 
-  return json.data;
+  return json.data !== undefined ? json.data : (json as T);
 }
 
 export const api = {
