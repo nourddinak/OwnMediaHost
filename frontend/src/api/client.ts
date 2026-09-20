@@ -94,7 +94,10 @@ export interface PaginatedResult<T> {
   has_more: boolean;
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+const API_BASE =
+  (typeof window !== 'undefined' && (window as any).__OMH_API_BASE__) ||
+  import.meta.env.VITE_API_BASE_URL ||
+  '/api/v1';
 const TOKEN_KEY = 'ownmediahost_auth_token';
 
 export function getStoredToken(): string | null {

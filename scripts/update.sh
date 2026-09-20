@@ -97,20 +97,24 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Terminate any running or stuck background cargo/rustc compilations to free CPU immediately
+if pgrep -f "cargo" >/dev/null 2>&1 || pgrep -f "rustc" >/dev/null 2>&1; then
+    log_warn "Detected background cargo/rustc compilation already running. Terminating to free VPS CPU..."
+    as_root pkill -9 -f "cargo" 2>/dev/null || true
+    as_root pkill -9 -f "rustc" 2>/dev/null || true
+    sleep 1
+fi
+
 # Single-instance lock to prevent overlapping updates
 LOCK_FILE="/tmp/ownmediahost-update.lock"
 if [ -f "$LOCK_FILE" ]; then
     OLD_PID=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
     if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null && [ "$OLD_PID" != "$$" ]; then
-        if [[ "$FORCE_UPDATE" == true ]]; then
-            log_warn "Another update process (PID: $OLD_PID) is running. Terminating due to --force..."
-            as_root kill -9 "$OLD_PID" 2>/dev/null || true
-            as_root pkill -f "cargo.*ownmediahost" 2>/dev/null || true
-        else
-            log_warn "An update process is already running (PID: $OLD_PID)."
-            log_info "To cancel the previous update and restart immediately, run: sudo bash $0 --force"
-            exit 0
-        fi
+        log_warn "Previous update process detected (PID: $OLD_PID). Terminating previous instance..."
+        as_root kill -9 "$OLD_PID" 2>/dev/null || true
+        as_root pkill -9 -f "cargo" 2>/dev/null || true
+        as_root pkill -9 -f "rustc" 2>/dev/null || true
+        sleep 1
     fi
 fi
 echo "$$" | as_root tee "$LOCK_FILE" >/dev/null
@@ -196,8 +200,9 @@ release_backend_url="https://github.com/nourddinak/OwnMediaHost/releases/latest/
 tmp_tar="/tmp/ownmediahost-backend-linux-amd64.tar.gz"
 as_root rm -f "$tmp_tar"
 
-# Terminate any lingering background cargo processes targeting ownmediahost to free VPS CPU
-as_root pkill -f "cargo.*ownmediahost" 2>/dev/null || true
+# Terminate any lingering background cargo/rustc processes to free VPS CPU
+as_root pkill -9 -f "cargo" 2>/dev/null || true
+as_root pkill -9 -f "rustc" 2>/dev/null || true
 
 CARGO_ENV=""
 for candidate in \
@@ -220,7 +225,7 @@ fi
 # Try downloading precompiled binary first (built automatically by GitHub Actions)
 if [[ "$BUILD_FROM_SOURCE" != true ]]; then
     log_info "Downloading precompiled backend release from GitHub..."
-    if as_root curl -fL --connect-timeout 15 --retry 2 -o "$tmp_tar" "$release_backend_url" && [ -s "$tmp_tar" ]; then
+    if as_root curl -fL --connect-timeout 20 --retry 3 -o "$tmp_tar" "$release_backend_url" && [ -s "$tmp_tar" ]; then
         log_info "Extracting precompiled binary..."
         tmp_extract="/tmp/ownmediahost-bin-extract"
         as_root rm -rf "$tmp_extract"
@@ -234,30 +239,36 @@ if [[ "$BUILD_FROM_SOURCE" != true ]]; then
             log_warn "Failed to extract precompiled archive."
         fi
     else
-        log_warn "Precompiled release binary not downloaded."
+        log_warn "Precompiled release binary not downloaded from ${release_backend_url}."
     fi
 fi
 
 if [[ "$binary_updated" != true ]]; then
-    log_info "Precompiled release binary not downloaded or --build-from-source requested. Compiling backend from source..."
+    if [[ "$BUILD_FROM_SOURCE" == true ]]; then
+        log_info "Compiling backend from source (--build-from-source requested)..."
+        cd "${REPO_DIR}/backend"
+        local_target_dir="/tmp/ownmediahost-cargo-target"
+        as_root rm -rf "$local_target_dir"
+        mkdir -p "$local_target_dir"
+        chmod 777 "$local_target_dir"
 
-    cd "${REPO_DIR}/backend"
-    local_target_dir="/tmp/ownmediahost-cargo-target"
-    as_root rm -rf "$local_target_dir"
-    mkdir -p "$local_target_dir"
-    chmod 777 "$local_target_dir"
-
-    if [ -n "$CARGO_ENV" ]; then
-        as_root bash -c ". '$CARGO_ENV' && CARGO_TARGET_DIR='$local_target_dir' cargo build --release"
-    elif have cargo; then
-        CARGO_TARGET_DIR="$local_target_dir" cargo build --release || as_root CARGO_TARGET_DIR="$local_target_dir" cargo build --release
+        if [ -n "$CARGO_ENV" ]; then
+            as_root bash -c ". '$CARGO_ENV' && CARGO_TARGET_DIR='$local_target_dir' cargo build --release"
+        elif have cargo; then
+            CARGO_TARGET_DIR="$local_target_dir" cargo build --release || as_root CARGO_TARGET_DIR="$local_target_dir" cargo build --release
+        else
+            log_error "Cargo/Rust not found. Please run the full deploy script first."
+            exit 1
+        fi
+        as_root install -m 755 "${local_target_dir}/release/ownmediahost-backend" /usr/local/bin/ownmediahost-backend
+        as_root rm -rf "$local_target_dir"
+        log_success "Backend binary compiled and updated."
     else
-        log_error "Cargo/Rust not found. Please run the full deploy script first."
+        log_error "Could not download precompiled release binary from GitHub."
+        log_error "URL: ${release_backend_url}"
+        log_error "To compile from source on this machine instead, run: sudo bash $0 --build-from-source"
         exit 1
     fi
-    as_root install -m 755 "${local_target_dir}/release/ownmediahost-backend" /usr/local/bin/ownmediahost-backend
-    as_root rm -rf "$local_target_dir"
-    log_success "Backend binary compiled and updated."
 fi
 
 # Remove legacy binary if present
@@ -366,15 +377,22 @@ fi
 log_info "Updating React frontend dashboard..."
 frontend_updated=false
 
-# If unified mode, try downloading precompiled frontend bundle first
-if [[ "$DEPLOY_MODE" != "split" ]]; then
+# Try downloading precompiled frontend bundle first (built automatically by GitHub Actions)
+if [[ "$BUILD_FROM_SOURCE" != true ]]; then
     release_frontend_url="https://github.com/nourddinak/OwnMediaHost/releases/latest/download/ownmediahost-frontend-dist.tar.gz"
     tmp_front_tar="/tmp/ownmediahost-frontend-dist.tar.gz"
     as_root rm -f "$tmp_front_tar"
 
-    if curl -fsSL -o "$tmp_front_tar" "$release_frontend_url" 2>/dev/null && [ -s "$tmp_front_tar" ]; then
+    log_info "Downloading precompiled frontend bundle from GitHub..."
+    if as_root curl -fL --connect-timeout 20 --retry 3 -o "$tmp_front_tar" "$release_frontend_url" && [ -s "$tmp_front_tar" ]; then
         as_root mkdir -p /var/www/ownmediahost/dist
+        as_root rm -rf /var/www/ownmediahost/dist/* 2>/dev/null || true
         if as_root tar -xzf "$tmp_front_tar" -C /var/www/ownmediahost/dist 2>/dev/null; then
+            # If split mode, inject runtime API base into index.html
+            if [[ "$DEPLOY_MODE" == "split" && -n "$BACKEND_DOMAIN" ]]; then
+                as_root sed -i "s|<head>|<head><script>window.__OMH_API_BASE__='https://${BACKEND_DOMAIN}/api/v1';</script>|g" /var/www/ownmediahost/dist/index.html 2>/dev/null || true
+                log_info "Injected runtime API base (https://${BACKEND_DOMAIN}/api/v1) into frontend index.html"
+            fi
             as_root chown -R www-data:www-data /var/www/ownmediahost 2>/dev/null || true
             as_root rm -f "$tmp_front_tar"
             log_success "Instant update: Precompiled frontend dashboard assets refreshed."
@@ -459,11 +477,19 @@ if [ -f /etc/caddy/Caddyfile ] && [ -f "$ENV_ACTIVE" ]; then
         cat << EOF | as_root tee -a /etc/caddy/Caddyfile >/dev/null
 
 # ============================== OwnMediaHost ==================================
-# ${FRONTEND_DOMAIN}   {static}
+# ${FRONTEND_DOMAIN}   {UI + API fallback}
 # ${BACKEND_DOMAIN}    {${caddy_port}}
 # ==============================================================================
 ${FRONTEND_DOMAIN} {
     encode gzip zstd
+
+    # Direct/fallback reverse proxy for media & API on frontend domain
+    @backend path /api* /f/* /i/* /a/* /thumbnails/* /private/* /health*
+    handle @backend {
+        reverse_proxy 127.0.0.1:${caddy_port} {
+            flush_interval -1
+        }
+    }
 
     handle_path /status* {
         root * /var/www/ownmediahost/status
@@ -481,6 +507,17 @@ ${BACKEND_DOMAIN} {
     request_body {
         max_size 10GB
     }
+
+    @cors_preflight method OPTIONS
+    handle @cors_preflight {
+        header Access-Control-Allow-Origin "{header.Origin}"
+        header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, Accept, Range, Origin, Cookie, X-Request-Id, X-Api-Key, Access-Control-Request-Method, Access-Control-Request-Headers"
+        header Access-Control-Allow-Credentials "true"
+        header Access-Control-Max-Age "86400"
+        respond "" 204
+    }
+
     reverse_proxy 127.0.0.1:${caddy_port} {
         flush_interval -1
     }
@@ -583,7 +620,14 @@ fi
 as_root systemctl daemon-reload
 as_root systemctl enable ownmediahost
 as_root systemctl restart ownmediahost
-as_root systemctl status ownmediahost --no-pager -n 5
+sleep 1
+
+if systemctl is-active --quiet ownmediahost; then
+    log_success "OwnMediaHost backend service is running and active!"
+else
+    log_warn "OwnMediaHost backend service is starting up or encountered an issue. Recent logs:"
+    as_root journalctl -u ownmediahost --no-pager -n 20 2>/dev/null || true
+fi
 
 # Ensure background update trigger watcher is active
 update_storage="${MEDIA_ROOT:-/var/lib/ownmediahost/storage}"

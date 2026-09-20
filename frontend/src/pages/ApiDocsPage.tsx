@@ -623,7 +623,8 @@ export const ApiDocsPage: React.FC = () => {
   useEffect(() => {
     // Auto-detect base URL: prefer explicit backend URL, then API base origin, then current origin
     const backendUrl = import.meta.env.VITE_BACKEND_URL || '';
-    const envBase = import.meta.env.VITE_API_BASE_URL || '';
+    const runtimeBase = typeof window !== 'undefined' ? (window as any).__OMH_API_BASE__ : '';
+    const envBase = runtimeBase || import.meta.env.VITE_API_BASE_URL || '';
     if (backendUrl) {
       setBaseUrl(backendUrl.replace(/\/+$/, ''));
     } else if (envBase && envBase.startsWith('http')) {

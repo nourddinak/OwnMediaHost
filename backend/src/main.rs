@@ -67,6 +67,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             header::HeaderName::from_static("x-request-id"),
             header::HeaderName::from_static("x-api-key"),
         ])
+        .expose_headers([
+            header::CONTENT_RANGE,
+            header::CONTENT_LENGTH,
+            header::ETAG,
+            header::ACCEPT_RANGES,
+            header::HeaderName::from_static("x-request-id"),
+        ])
+        .max_age(std::time::Duration::from_secs(86400))
         .allow_credentials(true)
         .allow_origin(AllowOrigin::predicate({
             let allowed_origins = config_arc.allowed_origins.clone();

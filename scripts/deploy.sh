@@ -738,8 +738,8 @@ build_frontend() {
     as_root mkdir -p "${www_target}"
     local frontend_ready=false
 
-    # 1. Fast Path: Download precompiled frontend assets from GitHub Releases (for unified domain)
-    if [[ "$BUILD_FROM_SOURCE" != true && "$DEPLOY_MODE" == "unified" ]]; then
+    # 1. Fast Path: Download precompiled frontend assets from GitHub Releases
+    if [[ "$BUILD_FROM_SOURCE" != true ]]; then
         local release_url="https://github.com/nourddinak/OwnMediaHost/releases/latest/download/ownmediahost-frontend-dist.tar.gz"
         log_info "Checking for precompiled frontend bundle (${release_url})..."
         local tmp_tar="/tmp/ownmediahost-frontend-dist.tar.gz"
@@ -747,7 +747,12 @@ build_frontend() {
 
         if curl -fsSL -o "$tmp_tar" "$release_url" 2>/dev/null && [ -s "$tmp_tar" ]; then
             log_info "Precompiled frontend bundle downloaded! Extracting to ${www_target}..."
+            as_root rm -rf "${www_target}/"* 2>/dev/null || true
             if as_root tar -xzf "$tmp_tar" -C "${www_target}" 2>/dev/null; then
+                if [[ "$DEPLOY_MODE" == "split" && -n "$BACKEND_DOMAIN" ]]; then
+                    as_root sed -i "s|<head>|<head><script>window.__OMH_API_BASE__='https://${BACKEND_DOMAIN}/api/v1';</script>|g" "${www_target}/index.html" 2>/dev/null || true
+                    log_info "Injected runtime API base (https://${BACKEND_DOMAIN}/api/v1) into frontend index.html"
+                fi
                 as_root chown -R www-data:www-data /var/www/ownmediahost 2>/dev/null || true
                 as_root rm -f "$tmp_tar"
                 log_success "Instant deployment: Precompiled frontend dashboard published to ${www_target}"
@@ -1085,11 +1090,19 @@ EOF
         caddy_block=$(cat << EOF
 
 # ============================== OwnMediaHost ==================================
-# ${FRONTEND_DOMAIN}   {static}
+# ${FRONTEND_DOMAIN}   {UI + API fallback}
 # ${BACKEND_DOMAIN}    {${BACKEND_PORT}}
 # ==============================================================================
 ${FRONTEND_DOMAIN} {
     encode gzip zstd
+
+    # Direct/fallback reverse proxy for media & API on frontend domain
+    @backend path /api* /f/* /i/* /a/* /thumbnails/* /private/* /health*
+    handle @backend {
+        reverse_proxy 127.0.0.1:${BACKEND_PORT} {
+            flush_interval -1
+        }
+    }
 
     # Decoupled Static Status Dashboard
     handle_path /status* {
@@ -1108,6 +1121,17 @@ ${BACKEND_DOMAIN} {
     request_body {
         max_size 10GB
     }
+
+    @cors_preflight method OPTIONS
+    handle @cors_preflight {
+        header Access-Control-Allow-Origin "{header.Origin}"
+        header Access-Control-Allow-Methods "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
+        header Access-Control-Allow-Headers "Authorization, Content-Type, Accept, Range, Origin, Cookie, X-Request-Id, X-Api-Key, Access-Control-Request-Method, Access-Control-Request-Headers"
+        header Access-Control-Allow-Credentials "true"
+        header Access-Control-Max-Age "86400"
+        respond "" 204
+    }
+
     reverse_proxy 127.0.0.1:${BACKEND_PORT} {
         flush_interval -1
     }
