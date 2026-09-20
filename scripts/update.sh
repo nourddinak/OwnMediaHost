@@ -294,6 +294,15 @@ if [ -f "$ENV_ACTIVE" ]; then
     public_url=$(as_root grep "^PUBLIC_BASE_URL=" "$ENV_ACTIVE" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || echo "")
     caddy_domain=$(echo "$public_url" | sed -e 's|^[^/]*//||' -e 's|/.*$||' -e 's|:[0-9]*$||')
 
+    domain_in_env=$(as_root grep "^DOMAIN=" "$ENV_ACTIVE" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || echo "")
+    if [ -n "$domain_in_env" ]; then
+        caddy_domain=$(echo "$domain_in_env" | sed -e 's|^[^/]*//||' -e 's|/.*$||' -e 's|:[0-9]*$||')
+    fi
+    if [ "$DEPLOY_MODE" = "unified" ]; then
+        FRONTEND_DOMAIN=""
+        BACKEND_DOMAIN=""
+    fi
+
     # Check SQLite database for newer settings configured via the Web UI
     DB_FILE="/var/lib/ownmediahost/storage/database/media.db"
     [ ! -f "$DB_FILE" ] && DB_FILE="${REPO_DIR}/backend/storage/database/media.db"
@@ -306,27 +315,32 @@ if [ -f "$ENV_ACTIVE" ]; then
         db_public_url=$(as_root sqlite3 "$DB_FILE" "SELECT value FROM settings WHERE key='public_base_url';" 2>/dev/null || echo "")
         db_status_url=$(as_root sqlite3 "$DB_FILE" "SELECT value FROM settings WHERE key='status_page_url';" 2>/dev/null || echo "")
 
-        if [ -n "$db_deploy_mode" ]; then
-            DEPLOY_MODE="$db_deploy_mode"
-            as_root sed -i "s|^DEPLOY_MODE=.*|DEPLOY_MODE=${DEPLOY_MODE}|" "$ENV_ACTIVE" 2>/dev/null || echo "DEPLOY_MODE=${DEPLOY_MODE}" | as_root tee -a "$ENV_ACTIVE" >/dev/null
-        fi
-        if [ -n "$db_frontend_domain" ]; then
-            FRONTEND_DOMAIN="$db_frontend_domain"
-            as_root sed -i "s|^FRONTEND_DOMAIN=.*|FRONTEND_DOMAIN=${FRONTEND_DOMAIN}|" "$ENV_ACTIVE" 2>/dev/null || echo "FRONTEND_DOMAIN=${FRONTEND_DOMAIN}" | as_root tee -a "$ENV_ACTIVE" >/dev/null
-        fi
-        if [ -n "$db_backend_domain" ]; then
-            BACKEND_DOMAIN="$db_backend_domain"
-            as_root sed -i "s|^BACKEND_DOMAIN=.*|BACKEND_DOMAIN=${BACKEND_DOMAIN}|" "$ENV_ACTIVE" 2>/dev/null || echo "BACKEND_DOMAIN=${BACKEND_DOMAIN}" | as_root tee -a "$ENV_ACTIVE" >/dev/null
-        fi
-        if [ -n "$db_domain" ] && [ -z "$caddy_domain" ]; then
-            caddy_domain="$db_domain"
+        if [ "$db_deploy_mode" = "unified" ] || { [ -z "$db_deploy_mode" ] && [ -n "$db_domain" ]; }; then
+            DEPLOY_MODE="unified"
+            FRONTEND_DOMAIN=""
+            BACKEND_DOMAIN=""
+            as_root sed -i "s|^DEPLOY_MODE=.*|DEPLOY_MODE=unified|" "$ENV_ACTIVE" 2>/dev/null || echo "DEPLOY_MODE=unified" | as_root tee -a "$ENV_ACTIVE" >/dev/null
+            as_root sed -i "s|^FRONTEND_DOMAIN=.*|FRONTEND_DOMAIN=|" "$ENV_ACTIVE" 2>/dev/null || true
+            as_root sed -i "s|^BACKEND_DOMAIN=.*|BACKEND_DOMAIN=|" "$ENV_ACTIVE" 2>/dev/null || true
+            if [ -n "$db_domain" ]; then
+                caddy_domain="$db_domain"
+            fi
+            caddy_domain=$(echo "$caddy_domain" | sed -e 's|^[^/]*//||' -e 's|/.*$||' -e 's|:[0-9]*$||')
             as_root sed -i "s|^DOMAIN=.*|DOMAIN=${caddy_domain}|" "$ENV_ACTIVE" 2>/dev/null || echo "DOMAIN=${caddy_domain}" | as_root tee -a "$ENV_ACTIVE" >/dev/null
+            as_root sed -i "s|^PUBLIC_BASE_URL=.*|PUBLIC_BASE_URL=https://${caddy_domain}|" "$ENV_ACTIVE" 2>/dev/null || echo "PUBLIC_BASE_URL=https://${caddy_domain}" | as_root tee -a "$ENV_ACTIVE" >/dev/null
+        elif [ "$db_deploy_mode" = "split" ]; then
+            DEPLOY_MODE="split"
+            as_root sed -i "s|^DEPLOY_MODE=.*|DEPLOY_MODE=split|" "$ENV_ACTIVE" 2>/dev/null || echo "DEPLOY_MODE=split" | as_root tee -a "$ENV_ACTIVE" >/dev/null
+            if [ -n "$db_frontend_domain" ]; then
+                FRONTEND_DOMAIN="$db_frontend_domain"
+                as_root sed -i "s|^FRONTEND_DOMAIN=.*|FRONTEND_DOMAIN=${FRONTEND_DOMAIN}|" "$ENV_ACTIVE" 2>/dev/null || echo "FRONTEND_DOMAIN=${FRONTEND_DOMAIN}" | as_root tee -a "$ENV_ACTIVE" >/dev/null
+            fi
+            if [ -n "$db_backend_domain" ]; then
+                BACKEND_DOMAIN="$db_backend_domain"
+                as_root sed -i "s|^BACKEND_DOMAIN=.*|BACKEND_DOMAIN=${BACKEND_DOMAIN}|" "$ENV_ACTIVE" 2>/dev/null || echo "BACKEND_DOMAIN=${BACKEND_DOMAIN}" | as_root tee -a "$ENV_ACTIVE" >/dev/null
+            fi
         fi
-        if [ -n "$db_public_url" ]; then
-            public_url="$db_public_url"
-            caddy_domain=$(echo "$public_url" | sed -e 's|^[^/]*//||' -e 's|/.*$||' -e 's|:[0-9]*$||')
-            as_root sed -i "s|^PUBLIC_BASE_URL=.*|PUBLIC_BASE_URL=${public_url}|" "$ENV_ACTIVE" 2>/dev/null || echo "PUBLIC_BASE_URL=${public_url}" | as_root tee -a "$ENV_ACTIVE" >/dev/null
-        fi
+
         if [ -n "$db_status_url" ]; then
             STATUS_DOMAIN="$db_status_url"
             as_root sed -i "s|^STATUS_PAGE_URL=.*|STATUS_PAGE_URL=${db_status_url}|" "$ENV_ACTIVE" 2>/dev/null || echo "STATUS_PAGE_URL=${db_status_url}" | as_root tee -a "$ENV_ACTIVE" >/dev/null

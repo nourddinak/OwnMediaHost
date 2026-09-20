@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api/client';
 import { useToast } from '../context/ToastContext';
 
+const cleanHost = (val: string) => {
+  return val.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '').replace(/:[0-9]+$/, '');
+};
+
 export const SettingsPage: React.FC = () => {
   const { toast } = useToast();
   const [settings, setSettings] = useState<Record<string, string>>({});
@@ -49,19 +53,31 @@ export const SettingsPage: React.FC = () => {
     fetchSettings();
   }, [toast]);
 
+  const defaultHost = typeof window !== 'undefined' ? window.location.host : 'media.yourdomain.com';
+
   const handleChange = (key: string, value: string) => {
     setSettings((prev) => {
       const updated = { ...prev, [key]: value };
 
-      // Helpful auto-sync for base URLs
-      if (key === 'domain' && (!prev['public_base_url'] || prev['public_base_url'].includes(prev['domain'] || 'localhost'))) {
-        if (value.trim()) {
-          updated['public_base_url'] = value.startsWith('http') ? value : `https://${value}`;
+      if (key === 'deploy_mode') {
+        if (value === 'unified') {
+          const dom = cleanHost(prev['domain'] || prev['frontend_domain'] || defaultHost);
+          updated['domain'] = dom;
+          updated['frontend_domain'] = '';
+          updated['backend_domain'] = '';
+          updated['public_base_url'] = `https://${dom}`;
+        } else {
+          const dom = cleanHost(prev['domain'] || prev['frontend_domain'] || defaultHost);
+          updated['frontend_domain'] = prev['frontend_domain'] || dom;
+          updated['backend_domain'] = prev['backend_domain'] || `api.${dom}`;
+          updated['public_base_url'] = `https://${updated['backend_domain']}`;
         }
-      } else if (key === 'backend_domain' && (!prev['public_base_url'] || prev['public_base_url'].includes(prev['backend_domain'] || 'localhost'))) {
-        if (value.trim()) {
-          updated['public_base_url'] = value.startsWith('http') ? value : `https://${value}`;
-        }
+      } else if (key === 'domain') {
+        const clean = cleanHost(value);
+        updated['public_base_url'] = clean ? `https://${clean}` : '';
+      } else if (key === 'backend_domain') {
+        const clean = cleanHost(value);
+        updated['public_base_url'] = clean ? `https://${clean}` : '';
       }
 
       return updated;
@@ -69,16 +85,37 @@ export const SettingsPage: React.FC = () => {
   };
 
   const handleSave = async () => {
+    const currentMode = settings['deploy_mode'] || 'unified';
+    const cleanDom = cleanHost(settings['domain'] || settings['frontend_domain'] || defaultHost);
+    const cleanFrontend = cleanHost(settings['frontend_domain'] || '');
+    const cleanBackend = cleanHost(settings['backend_domain'] || '');
+
+    const finalSettings = { ...settings };
+    finalSettings['deploy_mode'] = currentMode;
+
+    if (currentMode === 'unified') {
+      finalSettings['domain'] = cleanDom;
+      finalSettings['public_base_url'] = `https://${cleanDom}`;
+      finalSettings['frontend_domain'] = '';
+      finalSettings['backend_domain'] = '';
+    } else {
+      finalSettings['frontend_domain'] = cleanFrontend || cleanDom;
+      finalSettings['backend_domain'] = cleanBackend || `api.${cleanDom}`;
+      finalSettings['domain'] = cleanFrontend || cleanDom;
+      finalSettings['public_base_url'] = `https://${finalSettings['backend_domain']}`;
+    }
+
     const domainChanged =
-      (settings['deploy_mode'] || 'unified') !== (initialSettings['deploy_mode'] || 'unified') ||
-      (settings['domain'] || '') !== (initialSettings['domain'] || '') ||
-      (settings['frontend_domain'] || '') !== (initialSettings['frontend_domain'] || '') ||
-      (settings['backend_domain'] || '') !== (initialSettings['backend_domain'] || '');
+      (finalSettings['deploy_mode'] || 'unified') !== (initialSettings['deploy_mode'] || 'unified') ||
+      (finalSettings['domain'] || '') !== (initialSettings['domain'] || '') ||
+      (finalSettings['frontend_domain'] || '') !== (initialSettings['frontend_domain'] || '') ||
+      (finalSettings['backend_domain'] || '') !== (initialSettings['backend_domain'] || '');
 
     setSaving(true);
     try {
-      await api.updateSettings(settings);
-      setInitialSettings(settings);
+      await api.updateSettings(finalSettings);
+      setSettings(finalSettings);
+      setInitialSettings(finalSettings);
       toast('Platform settings updated successfully!');
       if (domainChanged) {
         setUpdatePhase('idle');
@@ -169,15 +206,21 @@ export const SettingsPage: React.FC = () => {
 
   // Determine active topology and probe targets
   const deployMode = settings['deploy_mode'] || 'unified';
-  const unifiedDomain = settings['domain'] || (typeof window !== 'undefined' ? window.location.host : 'media.yourdomain.com');
-  const frontendDomain = settings['frontend_domain'] || (typeof window !== 'undefined' ? window.location.host : 'media.yourdomain.com');
-  const backendDomain = settings['backend_domain'] || (typeof window !== 'undefined' ? `api.${window.location.host}` : 'api.yourdomain.com');
+
+  const rawDomain = settings['domain'] || settings['frontend_domain'] || defaultHost;
+  const cleanUnifiedDomain = cleanHost(rawDomain) || defaultHost;
+  const cleanFrontendDomain = cleanHost(settings['frontend_domain'] || '') || cleanUnifiedDomain;
+  const cleanBackendDomain = cleanHost(settings['backend_domain'] || '') || `api.${cleanFrontendDomain}`;
+
+  const autoBaseUrl = deployMode === 'unified'
+    ? `https://${cleanUnifiedDomain}`
+    : `https://${cleanBackendDomain}`;
 
   const computedProbeUrl = deployMode === 'unified'
-    ? (unifiedDomain.startsWith('http') ? `${unifiedDomain}/health` : `https://${unifiedDomain}/health`)
-    : (backendDomain.startsWith('http') ? `${backendDomain}/health` : `https://${backendDomain}/health`);
+    ? `https://${cleanUnifiedDomain}/health`
+    : `https://${cleanBackendDomain}/health`;
 
-  const computedFrontendUrl = frontendDomain.startsWith('http') ? frontendDomain : `https://${frontendDomain}`;
+  const computedFrontendUrl = `https://${cleanFrontendDomain}`;
 
   const handleCopyProbe = async () => {
     try {
@@ -446,29 +489,49 @@ export const SettingsPage: React.FC = () => {
             </>
           )}
 
-          {/* Public Media Base URL */}
-          <div style={{ marginTop: '12px' }}>
-            <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)', display: 'block' }}>
-              Public Media Base URL
-            </label>
-            <input
-              type="text"
-              value={settings['public_base_url'] || ''}
-              onChange={(e) => handleChange('public_base_url', e.target.value)}
-              placeholder="https://media.yourdomain.com or https://api.yourdomain.com"
+          {/* Public Media Base URL (Auto-Managed, Non-editable) */}
+          <div style={{ marginTop: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)' }}>
+                Public Media Base URL
+              </label>
+              <span
+                style={{
+                  fontSize: '10px',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  color: 'var(--text-tertiary)',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                Auto-Managed
+              </span>
+            </div>
+            <div
               style={{
                 width: '100%',
-                background: 'var(--bg-tertiary)',
+                background: 'rgba(0, 0, 0, 0.3)',
                 border: '1px solid var(--border-subtle)',
                 borderRadius: '6px',
                 padding: '8px 12px',
-                color: '#fff',
+                color: '#58a6ff',
+                fontFamily: 'var(--font-mono, monospace)',
                 fontSize: '13px',
-                marginTop: '4px',
+                userSelect: 'all',
+                cursor: 'default',
               }}
-            />
-            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px', display: 'block' }}>
-              Prefix used for generated permanent asset links (<code>/f/...</code>, <code>/a/...</code>, <code>/thumbnails/...</code>).
+            >
+              {autoBaseUrl}
+            </div>
+            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px', display: 'block' }}>
+              Prefix used for generated permanent asset links (<code>/f/...</code>, <code>/a/...</code>, <code>/thumbnails/...</code>). Automatically synced to your domain with HTTPS.
             </span>
           </div>
         </div>
@@ -555,7 +618,7 @@ export const SettingsPage: React.FC = () => {
               lineHeight: 1.45,
             }}
           >
-            ⚠️ <strong>Critical:</strong> You must monitor <code>/health</code> (not the bare root domain <code>https://{unifiedDomain}</code>). In single domain mode, Caddy serves static frontend files with HTTP 200 even when the backend is stopped! Targeting <code>/health</code> ensures Caddy returns <code>HTTP 502 Bad Gateway</code> when the backend goes down to trigger downtime tracking.
+            ⚠️ <strong>Critical:</strong> You must monitor <code>/health</code> (not the bare root domain <code>https://{cleanUnifiedDomain}</code>). In single domain mode, Caddy serves static frontend files with HTTP 200 even when the backend is stopped! Targeting <code>/health</code> ensures Caddy returns <code>HTTP 502 Bad Gateway</code> when the backend goes down to trigger downtime tracking.
           </div>
 
           {deployMode === 'split' && (

@@ -81,20 +81,34 @@ async fn get_settings(
         map.insert(r.key, r.value);
     }
 
-    if !map.contains_key("deploy_mode") {
-        map.insert("deploy_mode".to_string(), std::env::var("DEPLOY_MODE").unwrap_or_else(|_| "unified".to_string()));
-    }
-    if !map.contains_key("domain") {
-        map.insert("domain".to_string(), std::env::var("DOMAIN").unwrap_or_default());
-    }
-    if !map.contains_key("frontend_domain") {
-        map.insert("frontend_domain".to_string(), std::env::var("FRONTEND_DOMAIN").unwrap_or_default());
-    }
-    if !map.contains_key("backend_domain") {
-        map.insert("backend_domain".to_string(), std::env::var("BACKEND_DOMAIN").unwrap_or_default());
-    }
-    if !map.contains_key("public_base_url") {
-        map.insert("public_base_url".to_string(), std::env::var("PUBLIC_BASE_URL").unwrap_or_default());
+    let deploy_mode = map.get("deploy_mode").cloned().unwrap_or_else(|| {
+        std::env::var("DEPLOY_MODE").unwrap_or_else(|_| "unified".to_string())
+    });
+
+    if deploy_mode == "unified" {
+        map.insert("deploy_mode".to_string(), "unified".to_string());
+        map.remove("frontend_domain");
+        map.remove("backend_domain");
+        let domain_clean = map.get("domain")
+            .filter(|s| !s.is_empty())
+            .map(|d| d.trim().trim_start_matches("https://").trim_start_matches("http://").trim_end_matches('/').to_string());
+        if let Some(clean) = domain_clean {
+            map.insert("domain".to_string(), clean.clone());
+            map.insert("public_base_url".to_string(), format!("https://{}", clean));
+        }
+    } else {
+        if !map.contains_key("frontend_domain") {
+            map.insert("frontend_domain".to_string(), std::env::var("FRONTEND_DOMAIN").unwrap_or_default());
+        }
+        if !map.contains_key("backend_domain") {
+            map.insert("backend_domain".to_string(), std::env::var("BACKEND_DOMAIN").unwrap_or_default());
+        }
+        if !map.contains_key("domain") {
+            map.insert("domain".to_string(), std::env::var("DOMAIN").unwrap_or_default());
+        }
+        if !map.contains_key("public_base_url") {
+            map.insert("public_base_url".to_string(), std::env::var("PUBLIC_BASE_URL").unwrap_or_default());
+        }
     }
     if !map.contains_key("status_page_url") {
         map.insert("status_page_url".to_string(), std::env::var("STATUS_PAGE_URL").unwrap_or_default());
@@ -109,6 +123,7 @@ async fn update_settings(
     Json(req): Json<UpdateSettingsRequest>,
 ) -> Result<impl IntoResponse, AppError> {
     let now = chrono::Utc::now().to_rfc3339();
+    let is_unified = req.settings.get("deploy_mode").map(|m| m == "unified").unwrap_or(false);
 
     for (k, v) in &req.settings {
         sqlx::query(
@@ -120,6 +135,12 @@ async fn update_settings(
         .bind(&now)
         .execute(&state.pool)
         .await?;
+    }
+
+    if is_unified {
+        let _ = sqlx::query("DELETE FROM settings WHERE key IN ('frontend_domain', 'backend_domain')")
+            .execute(&state.pool)
+            .await;
     }
 
     state.settings_cache.update_batch(&req.settings).await;
@@ -179,20 +200,33 @@ fn sync_settings_to_env_file(settings: &HashMap<String, String>) {
     let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
 
     let mut env_updates = HashMap::new();
-    if let Some(v) = settings.get("deploy_mode") {
-        env_updates.insert("DEPLOY_MODE", v.clone());
-    }
-    if let Some(v) = settings.get("domain") {
-        env_updates.insert("DOMAIN", v.clone());
-    }
-    if let Some(v) = settings.get("frontend_domain") {
-        env_updates.insert("FRONTEND_DOMAIN", v.clone());
-    }
-    if let Some(v) = settings.get("backend_domain") {
-        env_updates.insert("BACKEND_DOMAIN", v.clone());
-    }
-    if let Some(v) = settings.get("public_base_url") {
-        env_updates.insert("PUBLIC_BASE_URL", v.clone());
+    let is_unified = settings.get("deploy_mode").map(|m| m == "unified").unwrap_or(false);
+
+    if is_unified {
+        env_updates.insert("DEPLOY_MODE", "unified".to_string());
+        if let Some(v) = settings.get("domain") {
+            let clean = v.trim().trim_start_matches("https://").trim_start_matches("http://").trim_end_matches('/');
+            env_updates.insert("DOMAIN", clean.to_string());
+            env_updates.insert("PUBLIC_BASE_URL", format!("https://{}", clean));
+        }
+        env_updates.insert("FRONTEND_DOMAIN", String::new());
+        env_updates.insert("BACKEND_DOMAIN", String::new());
+    } else {
+        if let Some(v) = settings.get("deploy_mode") {
+            env_updates.insert("DEPLOY_MODE", v.clone());
+        }
+        if let Some(v) = settings.get("domain") {
+            env_updates.insert("DOMAIN", v.clone());
+        }
+        if let Some(v) = settings.get("frontend_domain") {
+            env_updates.insert("FRONTEND_DOMAIN", v.clone());
+        }
+        if let Some(v) = settings.get("backend_domain") {
+            env_updates.insert("BACKEND_DOMAIN", v.clone());
+        }
+        if let Some(v) = settings.get("public_base_url") {
+            env_updates.insert("PUBLIC_BASE_URL", v.clone());
+        }
     }
     if let Some(v) = settings.get("status_page_url") {
         env_updates.insert("STATUS_PAGE_URL", v.clone());
