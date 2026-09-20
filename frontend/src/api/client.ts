@@ -129,6 +129,10 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     API_BASE.startsWith('http') &&
     !API_BASE.includes(window.location.host);
 
+  // Only safe/idempotent methods can be retried on fallback without side effects.
+  const method = (options.method || 'GET').toUpperCase();
+  const isSafeMethod = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+
   try {
     response = await fetch(`${API_BASE}${endpoint}`, {
       ...options,
@@ -136,7 +140,7 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
       credentials: 'include',
     });
   } catch (netErr: any) {
-    if (isCrossOrigin) {
+    if (isCrossOrigin && isSafeMethod) {
       try {
         response = await fetch(`/api/v1${endpoint}`, {
           ...options,
@@ -156,8 +160,9 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   if (contentType.includes('application/json')) {
     json = await response.json();
   } else {
-    // If cross-origin returned non-JSON (e.g. Caddy routing or SSL error), attempt same-origin fallback
-    if (isCrossOrigin) {
+    // If cross-origin returned non-JSON (e.g. Caddy routing or SSL error),
+    // attempt same-origin fallback ONLY for safe methods to avoid double-mutation.
+    if (isCrossOrigin && isSafeMethod) {
       try {
         const fallbackRes = await fetch(`/api/v1${endpoint}`, {
           ...options,
@@ -177,6 +182,10 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
     const text = await response.text();
     if (!response.ok) {
       throw new Error(`HTTP ${response.status}: ${response.statusText || text.slice(0, 100)}`);
+    }
+    // For mutating requests that got a 2xx but non-JSON body, treat as success
+    if (!isSafeMethod && response.ok) {
+      return undefined as T;
     }
     throw new Error(`Received unexpected non-JSON response from server (${contentType || 'HTML'}). Reverse proxy routing error.`);
   }
