@@ -288,427 +288,294 @@ export const SettingsPage: React.FC = () => {
   };
 
   if (loading) {
-    return <div style={{ padding: '40px', color: 'var(--text-tertiary)' }}>Loading platform settings...</div>;
+    return (
+      <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+        <div className="spinner" style={{ margin: '0 auto 12px' }} />
+        Loading platform settings...
+      </div>
+    );
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '760px' }}>
-      <div>
-        <h2 style={{ fontSize: '20px', fontWeight: 600 }}>Platform Settings</h2>
-        <p style={{ fontSize: '13px', color: 'var(--text-tertiary)', marginTop: '4px' }}>
-          Configure domain routing topologies, Better Stack 24/7 out-of-band monitoring, media upload policies, and retention schedules.
-        </p>
+    <div className="settings-page-wrapper">
+      {/* Header Row */}
+      <div className="settings-header-row">
+        <div className="settings-title-group">
+          <h1 className="settings-page-title">
+            Platform Settings
+          </h1>
+          <p className="settings-page-subtitle">
+            Configure domain routing topologies, Better Stack 24/7 out-of-band monitoring, media upload policies, and retention schedules.
+          </p>
+        </div>
+        <button
+          onClick={handleSave}
+          disabled={saving}
+          className="btn btn-primary press-scale settings-header-save-btn"
+          aria-label="Save Settings"
+        >
+          {saving ? 'Saving...' : 'Save Settings'}
+        </button>
       </div>
 
-      {/* Main Settings Card */}
-      <div
-        style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-md)',
-          padding: '24px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '20px',
-        }}
-      >
-        {/* Section: Domain & Routing Architecture */}
-        <div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-            <label style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
-              Domain & Routing Topology
+      {/* Card 1: Domain & Routing Architecture */}
+      <section className="settings-card">
+        <div className="settings-card-header">
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <h2 className="settings-card-title">Domain & Routing Topology</h2>
+              <span className="settings-badge">
+                {deployMode === 'unified' ? 'Single Unified Domain' : 'Split 2-Domain Mode'}
+              </span>
+            </div>
+            <p className="settings-card-desc">
+              Choose whether your server operates with a single unified domain or separates the React frontend dashboard and Axum API across two distinct domains.
+            </p>
+          </div>
+        </div>
+
+        {/* Topology Choice Cards */}
+        <div className="settings-topology-grid">
+          {/* Card 1: Single Unified Domain */}
+          <div
+            onClick={() => handleChange('deploy_mode', 'unified')}
+            className={`settings-choice-card ${deployMode === 'unified' ? 'active' : ''}`}
+            role="radio"
+            aria-checked={deployMode === 'unified'}
+            tabIndex={0}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+              <input
+                type="radio"
+                name="deploy_mode"
+                checked={deployMode === 'unified'}
+                onChange={() => handleChange('deploy_mode', 'unified')}
+                style={{ accentColor: '#ffffff' }}
+              />
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Single Unified Domain
+              </span>
+              <span className="settings-recommended-pill">
+                Recommended
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginLeft: '26px', lineHeight: 1.45, margin: '0 0 0 26px' }}>
+              Caddy reverse-proxy routes both the React dashboard and Axum media streaming APIs under one domain (e.g. <code>media.yourdomain.com</code>). Zero CORS friction.
+            </p>
+          </div>
+
+          {/* Card 2: Split 2-Domain Setup */}
+          <div
+            onClick={() => handleChange('deploy_mode', 'split')}
+            className={`settings-choice-card ${deployMode === 'split' ? 'active' : ''}`}
+            role="radio"
+            aria-checked={deployMode === 'split'}
+            tabIndex={0}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+              <input
+                type="radio"
+                name="deploy_mode"
+                checked={deployMode === 'split'}
+                onChange={() => handleChange('deploy_mode', 'split')}
+                style={{ accentColor: '#ffffff' }}
+              />
+              <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Split 2-Domain Setup
+              </span>
+            </div>
+            <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginLeft: '26px', lineHeight: 1.45, margin: '0 0 0 26px' }}>
+              Separate frontend dashboard (e.g. <code>media.yourdomain.com</code>) and dedicated backend streaming API (e.g. <code>api.yourdomain.com</code>).
+            </p>
+          </div>
+        </div>
+
+        {/* Domain Inputs */}
+        {deployMode === 'unified' ? (
+          <div>
+            <label className="settings-label">
+              Unified Media Domain
             </label>
-            <span
-              style={{
-                fontSize: '11px',
-                padding: '3px 8px',
-                borderRadius: '12px',
-                background: deployMode === 'unified' ? 'rgba(41, 151, 255, 0.15)' : 'rgba(175, 82, 222, 0.15)',
-                color: deployMode === 'unified' ? '#2997ff' : '#af52de',
-                fontWeight: 500,
-                border: `1px solid ${deployMode === 'unified' ? 'rgba(41, 151, 255, 0.3)' : 'rgba(175, 82, 222, 0.3)'}`,
-              }}
-            >
-              {deployMode === 'unified' ? 'Single Domain Mode' : 'Split 2-Domain Mode'}
+            <input
+              type="text"
+              value={settings['domain'] || ''}
+              onChange={(e) => handleChange('domain', e.target.value)}
+              placeholder="media.yourdomain.com"
+              className="settings-input"
+            />
+            <span className="settings-hint">
+              Primary domain pointing to your server VPS.
             </span>
           </div>
-          <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', display: 'block', marginBottom: '14px' }}>
-            Choose whether your server operates with a single unified domain or separates the React frontend dashboard and Axum API across two distinct domains.
-          </span>
-
-          {/* Topology Choice Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px', marginBottom: '16px' }}>
-            {/* Card 1: Single Unified Domain */}
-            <div
-              onClick={() => handleChange('deploy_mode', 'unified')}
-              style={{
-                padding: '14px',
-                borderRadius: '8px',
-                background: deployMode === 'unified' ? 'rgba(41, 151, 255, 0.08)' : 'var(--bg-tertiary)',
-                border: `1.5px solid ${deployMode === 'unified' ? '#2997ff' : 'var(--border-subtle)'}`,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                <input
-                  type="radio"
-                  name="deploy_mode"
-                  checked={deployMode === 'unified'}
-                  onChange={() => handleChange('deploy_mode', 'unified')}
-                  style={{ accentColor: '#2997ff' }}
-                />
-                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  Single Unified Domain
-                </span>
-                <span style={{ fontSize: '10px', background: 'rgba(48, 209, 88, 0.15)', color: '#30d158', padding: '2px 6px', borderRadius: '4px', fontWeight: 500 }}>
-                  Recommended
-                </span>
-              </div>
-              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginLeft: '24px', lineHeight: 1.4 }}>
-                Caddy routes both React dashboard UI and Axum media streaming APIs on one domain (e.g. <code>media.yourdomain.com</code>). Zero CORS friction.
-              </p>
-            </div>
-
-            {/* Card 2: Split 2-Domain Setup */}
-            <div
-              onClick={() => handleChange('deploy_mode', 'split')}
-              style={{
-                padding: '14px',
-                borderRadius: '8px',
-                background: deployMode === 'split' ? 'rgba(175, 82, 222, 0.08)' : 'var(--bg-tertiary)',
-                border: `1.5px solid ${deployMode === 'split' ? '#af52de' : 'var(--border-subtle)'}`,
-                cursor: 'pointer',
-                transition: 'all 0.15s ease',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
-                <input
-                  type="radio"
-                  name="deploy_mode"
-                  checked={deployMode === 'split'}
-                  onChange={() => handleChange('deploy_mode', 'split')}
-                  style={{ accentColor: '#af52de' }}
-                />
-                <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  Split 2-Domain Setup
-                </span>
-              </div>
-              <p style={{ fontSize: '11px', color: 'var(--text-secondary)', marginLeft: '24px', lineHeight: 1.4 }}>
-                Separate frontend dashboard (e.g. <code>media.yourdomain.com</code>) and dedicated backend streaming API (e.g. <code>api.yourdomain.com</code>).
-              </p>
-            </div>
-          </div>
-
-          {/* Conditional Domain Inputs based on Mode */}
-          {deployMode === 'unified' ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+        ) : (
+          <>
+            <div className="settings-grid-2col">
               <div>
-                <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)', display: 'block' }}>
-                  Unified Media Domain
+                <label className="settings-label">
+                  Frontend Dashboard Domain
                 </label>
                 <input
                   type="text"
-                  value={settings['domain'] || ''}
-                  onChange={(e) => handleChange('domain', e.target.value)}
+                  value={settings['frontend_domain'] || ''}
+                  onChange={(e) => handleChange('frontend_domain', e.target.value)}
                   placeholder="media.yourdomain.com"
-                  style={{
-                    width: '100%',
-                    background: 'var(--bg-tertiary)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    color: '#fff',
-                    fontSize: '13px',
-                    marginTop: '4px',
-                  }}
+                  className="settings-input"
                 />
-                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px', display: 'block' }}>
-                  Primary domain pointing to your server VPS.
+                <span className="settings-hint">
+                  Serves the React dashboard SPA.
+                </span>
+              </div>
+              <div>
+                <label className="settings-label">
+                  Backend API Domain
+                </label>
+                <input
+                  type="text"
+                  value={settings['backend_domain'] || ''}
+                  onChange={(e) => handleChange('backend_domain', e.target.value)}
+                  placeholder="api.yourdomain.com"
+                  className="settings-input"
+                />
+                <span className="settings-hint">
+                  Axum API and media streaming.
                 </span>
               </div>
             </div>
-          ) : (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                <div>
-                  <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)', display: 'block' }}>
-                    Frontend Dashboard Domain
-                  </label>
-                  <input
-                    type="text"
-                    value={settings['frontend_domain'] || ''}
-                    onChange={(e) => handleChange('frontend_domain', e.target.value)}
-                    placeholder="media.yourdomain.com"
-                    style={{
-                      width: '100%',
-                      background: 'var(--bg-tertiary)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: '6px',
-                      padding: '8px 12px',
-                      color: '#fff',
-                      fontSize: '13px',
-                      marginTop: '4px',
-                    }}
-                  />
-                  <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px', display: 'block' }}>
-                    Serves the React dashboard SPA.
-                  </span>
-                </div>
-                <div>
-                  <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)', display: 'block' }}>
-                    Backend API Domain
-                  </label>
-                  <input
-                    type="text"
-                    value={settings['backend_domain'] || ''}
-                    onChange={(e) => handleChange('backend_domain', e.target.value)}
-                    placeholder="api.yourdomain.com"
-                    style={{
-                      width: '100%',
-                      background: 'var(--bg-tertiary)',
-                      border: '1px solid var(--border-subtle)',
-                      borderRadius: '6px',
-                      padding: '8px 12px',
-                      color: '#fff',
-                      fontSize: '13px',
-                      marginTop: '4px',
-                    }}
-                  />
-                  <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px', display: 'block' }}>
-                    Axum API and media streaming.
-                  </span>
-                </div>
-              </div>
 
-              {/* Split Mode Server Sync Notice */}
-              <div
-                style={{
-                  marginTop: '10px',
-                  padding: '10px 12px',
-                  borderRadius: '6px',
-                  background: 'rgba(255, 159, 10, 0.08)',
-                  border: '1px solid rgba(255, 159, 10, 0.25)',
-                  fontSize: '11px',
-                  color: '#ff9f0a',
-                  lineHeight: 1.5,
-                }}
-              >
-                <strong>VPS requirement for Split Mode:</strong> Add a DNS <code>A</code> record for <code>{settings['backend_domain'] || 'api.yourdomain.com'}</code> pointing to your VPS IP, then run <code>sudo bash /opt/ownmediahost/scripts/update.sh</code> on your server so Caddy provisions the second SSL certificate and configures cross-domain routing.
-              </div>
-            </>
-          )}
+            {/* Split Mode Notice */}
+            <div className="settings-notice-box">
+              <strong style={{ color: 'var(--text-primary)' }}>VPS Requirement for Split Mode:</strong> Add a DNS <code>A</code> record for <code>{settings['backend_domain'] || 'api.yourdomain.com'}</code> pointing to your VPS IP, then run <code>sudo bash /opt/ownmediahost/scripts/update.sh</code> on your server so Caddy provisions the second SSL certificate and configures cross-domain routing.
+            </div>
+          </>
+        )}
 
-          {/* Public Media Base URL (Auto-Managed, Non-editable) */}
-          <div style={{ marginTop: '14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)' }}>
-                Public Media Base URL
-              </label>
-              <span
-                style={{
-                  fontSize: '10px',
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  color: 'var(--text-tertiary)',
-                  padding: '2px 6px',
-                  borderRadius: '4px',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}
-              >
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
-                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                </svg>
-                Auto-Managed
-              </span>
-            </div>
-            <div
-              style={{
-                width: '100%',
-                background: 'rgba(0, 0, 0, 0.3)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: '6px',
-                padding: '8px 12px',
-                color: '#58a6ff',
-                fontFamily: 'var(--font-mono, monospace)',
-                fontSize: '13px',
-                userSelect: 'all',
-                cursor: 'default',
-              }}
-            >
-              {autoBaseUrl}
-            </div>
-            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '4px', display: 'block' }}>
-              Prefix used for generated permanent asset links (<code>/f/...</code>, <code>/a/...</code>, <code>/thumbnails/...</code>). Automatically synced to your domain with HTTPS.
+        {/* Public Media Base URL */}
+        <div style={{ marginTop: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+            <label className="settings-label" style={{ margin: 0 }}>
+              Public Media Base URL
+            </label>
+            <span className="settings-badge-subtle">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              Auto-Managed
             </span>
+          </div>
+          <div className="settings-code-box">
+            {autoBaseUrl}
+          </div>
+          <span className="settings-hint">
+            Prefix used for generated permanent asset links (<code>/f/...</code>, <code>/a/...</code>, <code>/thumbnails/...</code>). Automatically synchronized with your domain and HTTPS.
+          </span>
+        </div>
+      </section>
+
+      {/* Card 2: Better Stack 24/7 Monitoring */}
+      <section className="settings-card">
+        <div className="settings-card-header">
+          <div style={{ flex: 1, minWidth: '240px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff', display: 'inline-block' }} />
+              <h2 className="settings-card-title">Better Stack 24/7 Health Monitoring</h2>
+            </div>
+            <p className="settings-card-desc">
+              Configure independent out-of-band health probes and status pages that monitor your server uptime down to the second.
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={handleCopyProbe}
+              className="btn btn-secondary press-scale settings-btn-sm"
+            >
+              {copiedProbe ? '✓ Copied' : 'Copy Probe URL'}
+            </button>
+            <button
+              type="button"
+              onClick={handleTestProbe}
+              disabled={probing}
+              className="btn btn-secondary press-scale settings-btn-sm"
+            >
+              {probing ? 'Testing...' : 'Test Probe'}
+            </button>
           </div>
         </div>
 
-        {/* Section: Better Stack Monitor Target (Auto-Computed) */}
-        <div
-          style={{
-            border: '1px solid rgba(41, 151, 255, 0.25)',
-            background: 'rgba(41, 151, 255, 0.04)',
-            borderRadius: '8px',
-            padding: '16px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#2997ff' }} />
-              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Better Stack Monitor Target URL
-              </label>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <button
-                type="button"
-                onClick={handleCopyProbe}
-                className="btn btn-secondary"
-                style={{
-                  fontSize: '11px',
-                  padding: '4px 10px',
-                  borderRadius: '5px',
-                  background: copiedProbe ? 'rgba(48, 209, 88, 0.2)' : 'var(--bg-tertiary)',
-                  color: copiedProbe ? '#30d158' : 'var(--text-primary)',
-                  border: '1px solid var(--border-subtle)',
-                }}
-              >
-                {copiedProbe ? '✓ Copied' : 'Copy URL'}
-              </button>
-              <button
-                type="button"
-                onClick={handleTestProbe}
-                disabled={probing}
-                className="btn btn-secondary"
-                style={{
-                  fontSize: '11px',
-                  padding: '4px 10px',
-                  borderRadius: '5px',
-                  background: 'var(--bg-tertiary)',
-                  border: '1px solid var(--border-subtle)',
-                }}
-              >
-                {probing ? 'Testing...' : 'Test Probe'}
-              </button>
-            </div>
-          </div>
+        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
+          Enter this URL into your Better Stack monitor (<strong>Uptime → Create Monitor</strong>):
+        </span>
 
-          <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'block', marginBottom: '8px', lineHeight: 1.4 }}>
-            Enter this URL into your Better Stack monitor (<strong>Uptime → Create Monitor</strong>) to record 24/7 downtime down to the second:
-          </span>
+        <div className="settings-code-box">
+          {computedProbeUrl}
+        </div>
 
-          <div
-            style={{
-              background: 'rgba(0, 0, 0, 0.4)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: '6px',
-              padding: '8px 12px',
-              fontFamily: 'var(--font-mono, monospace)',
-              fontSize: '12px',
-              color: '#58a6ff',
-              wordBreak: 'break-all',
-              userSelect: 'all',
-            }}
-          >
-            {computedProbeUrl}
-          </div>
-
+        {/* Live Probe Result Feedback */}
+        {probeResult && (
           <div
             style={{
               marginTop: '10px',
-              padding: '8px 12px',
-              borderRadius: '6px',
-              background: 'rgba(255, 159, 10, 0.08)',
-              border: '1px solid rgba(255, 159, 10, 0.25)',
-              fontSize: '11px',
-              color: '#ff9f0a',
-              lineHeight: 1.45,
+              padding: '10px 14px',
+              borderRadius: '8px',
+              background: probeResult.ok ? 'rgba(48, 209, 88, 0.08)' : 'rgba(255, 69, 58, 0.08)',
+              border: `1px solid ${probeResult.ok ? 'rgba(48, 209, 88, 0.25)' : 'rgba(255, 69, 58, 0.25)'}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: '12px',
             }}
           >
-            ⚠️ <strong>Critical:</strong> You must monitor <code>/health</code> (not the bare root domain <code>https://{cleanUnifiedDomain}</code>). In single domain mode, Caddy serves static frontend files with HTTP 200 even when the backend is stopped! Targeting <code>/health</code> ensures Caddy returns <code>HTTP 502 Bad Gateway</code> when the backend goes down to trigger downtime tracking.
-          </div>
-
-          {deployMode === 'split' && (
-            <div style={{ marginTop: '12px', borderTop: '1px dashed rgba(255, 255, 255, 0.1)', paddingTop: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
-                  Optional Frontend UI Monitor (Checks static dashboard web availability):
-                </span>
-                <button
-                  type="button"
-                  onClick={handleCopyFrontendProbe}
-                  className="btn btn-secondary"
-                  style={{
-                    fontSize: '11px',
-                    padding: '3px 8px',
-                    borderRadius: '4px',
-                    background: copiedFrontendProbe ? 'rgba(48, 209, 88, 0.2)' : 'var(--bg-tertiary)',
-                    color: copiedFrontendProbe ? '#30d158' : 'var(--text-primary)',
-                    border: '1px solid var(--border-subtle)',
-                  }}
-                >
-                  {copiedFrontendProbe ? '✓ Copied' : 'Copy UI URL'}
-                </button>
-              </div>
-              <div
-                style={{
-                  background: 'rgba(0, 0, 0, 0.4)',
-                  border: '1px solid rgba(255, 255, 255, 0.08)',
-                  borderRadius: '6px',
-                  padding: '6px 10px',
-                  fontFamily: 'var(--font-mono, monospace)',
-                  fontSize: '11px',
-                  color: '#a5d6ff',
-                  wordBreak: 'break-all',
-                }}
-              >
-                {computedFrontendUrl}
-              </div>
-            </div>
-          )}
-
-          {probeResult && (
-            <div
-              style={{
-                marginTop: '10px',
-                padding: '8px 12px',
-                borderRadius: '6px',
-                background: probeResult.ok ? 'rgba(48, 209, 88, 0.1)' : 'rgba(255, 69, 58, 0.1)',
-                border: `1px solid ${probeResult.ok ? 'rgba(48, 209, 88, 0.3)' : 'rgba(255, 69, 58, 0.3)'}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                fontSize: '11px',
-              }}
-            >
-              <span style={{ color: probeResult.ok ? '#30d158' : '#ff453a', fontWeight: 500 }}>
-                {probeResult.status}
+            <span style={{ color: probeResult.ok ? '#30d158' : '#ff453a', fontWeight: 500 }}>
+              {probeResult.status}
+            </span>
+            {probeResult.latency !== undefined && (
+              <span style={{ color: 'var(--text-tertiary)' }}>
+                Latency: {probeResult.latency}ms
               </span>
-              {probeResult.latency !== undefined && (
-                <span style={{ color: 'var(--text-tertiary)' }}>
-                  Latency: {probeResult.latency}ms
-                </span>
-              )}
-            </div>
-          )}
+            )}
+          </div>
+        )}
+
+        {/* Better Stack Health Warning Notice */}
+        <div className="settings-notice-box" style={{ marginTop: '12px' }}>
+          <strong style={{ color: 'var(--text-primary)' }}>Important:</strong> Monitor <code>/health</code> (not the bare root domain <code>https://{cleanUnifiedDomain}</code>). In single domain mode, Caddy serves static frontend files with HTTP 200 even when the backend is stopped! Targeting <code>/health</code> ensures Caddy returns <code>HTTP 502 Bad Gateway</code> when the backend goes down to trigger downtime tracking.
         </div>
 
-        {/* Section: Public Out-of-Band Status Page */}
-        <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '18px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
+        {/* Optional Frontend UI Probe (if Split Mode) */}
+        {deployMode === 'split' && (
+          <div style={{ marginTop: '16px', borderTop: '1px dashed rgba(255, 255, 255, 0.1)', paddingTop: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Optional Frontend UI Monitor (Checks static dashboard web availability):
+              </span>
+              <button
+                type="button"
+                onClick={handleCopyFrontendProbe}
+                className="btn btn-secondary press-scale settings-btn-sm"
+              >
+                {copiedFrontendProbe ? '✓ Copied' : 'Copy UI URL'}
+              </button>
+            </div>
+            <div className="settings-code-box">
+              {computedFrontendUrl}
+            </div>
+          </div>
+        )}
+
+        {/* Public Out-of-Band Status Page */}
+        <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '18px', marginTop: '18px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px', flexWrap: 'wrap', gap: '8px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <label style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Public Out-of-Band Status Page (Better Stack / Custom Domain)
+              <label className="settings-label" style={{ margin: 0 }}>
+                Public Out-of-Band Status Page
               </label>
               {settings['status_page_url'] ? (
-                <span style={{ fontSize: '10px', background: 'rgba(48, 209, 88, 0.15)', color: '#30d158', padding: '2px 6px', borderRadius: '4px', fontWeight: 500 }}>
+                <span className="settings-status-badge connected">
                   Connected
                 </span>
               ) : (
-                <span style={{ fontSize: '10px', background: 'rgba(255, 255, 255, 0.08)', color: 'var(--text-tertiary)', padding: '2px 6px', borderRadius: '4px' }}>
+                <span className="settings-status-badge unlinked">
                   Unlinked
                 </span>
               )}
@@ -718,101 +585,81 @@ export const SettingsPage: React.FC = () => {
                 href={settings['status_page_url']}
                 target="_blank"
                 rel="noopener noreferrer"
-                style={{
-                  fontSize: '12px',
-                  color: 'var(--color-primary, #6366f1)',
-                  textDecoration: 'none',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                }}
+                className="settings-link"
               >
                 Open Status Page ↗
               </a>
             )}
           </div>
-          <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', lineHeight: 1.5 }}>
-            Configure your custom status page URL (e.g. <code>https://status.yourdomain.com</code> via DNS CNAME to <code>statuspage.betteruptime.com</code>, or your hosted Better Stack URL). Survives total VPS downtime and records outages to the second.
+          <span className="settings-hint" style={{ marginBottom: '8px' }}>
+            Configure your custom status page URL (e.g. <code>https://status.yourdomain.com</code> via DNS CNAME to <code>statuspage.betteruptime.com</code>, or your hosted Better Stack URL).
           </span>
           <input
             type="text"
             value={settings['status_page_url'] || ''}
             onChange={(e) => handleChange('status_page_url', e.target.value)}
             placeholder="https://status.yourdomain.com or https://yourname.betteruptime.com"
-            style={{
-              width: '100%',
-              background: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '6px',
-              padding: '8px 12px',
-              color: '#fff',
-              fontSize: '13px',
-              marginTop: '8px',
-            }}
+            className="settings-input"
           />
         </div>
+      </section>
 
-        {/* Section: Duplicate File Detection Mode */}
-        <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '18px' }}>
-          <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', display: 'block' }}>
-            Duplicate File Detection Mode
-          </label>
-          <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-            Action taken when an upload matches the SHA-256 hash of an existing file.
-          </span>
-          <select
-            value={settings['duplicate_handling'] || 'allow'}
-            onChange={(e) => handleChange('duplicate_handling', e.target.value)}
-            style={{
-              width: '100%',
-              background: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '6px',
-              padding: '8px 12px',
-              color: '#fff',
-              fontSize: '13px',
-              marginTop: '6px',
-            }}
-          >
-            <option value="allow">Allow duplicates (Store multiple copies)</option>
-            <option value="reuse">Reuse existing (Return existing media object)</option>
-            <option value="reject">Reject duplicates (Return 409 Conflict)</option>
-          </select>
+      {/* Card 3: Media Upload Policies & Storage Retention */}
+      <section className="settings-card">
+        <div className="settings-card-header">
+          <div>
+            <h2 className="settings-card-title">Media Upload & Retention Policies</h2>
+            <p className="settings-card-desc">
+              Manage duplicate SHA-256 deduplication, automatic recycle bin pruning, and file format whitelists.
+            </p>
+          </div>
         </div>
 
-        {/* Section: Trash Retention Days */}
-        <div>
-          <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', display: 'block' }}>
-            Trash Retention Period (Days)
-          </label>
-          <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-            Number of days deleted media stays in the recycle bin before permanent pruning.
-          </span>
-          <input
-            type="number"
-            min="1"
-            max="365"
-            value={settings['trash_retention_days'] || '30'}
-            onChange={(e) => handleChange('trash_retention_days', e.target.value)}
-            style={{
-              width: '100%',
-              background: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '6px',
-              padding: '8px 12px',
-              color: '#fff',
-              fontSize: '13px',
-              marginTop: '6px',
-            }}
-          />
+        <div className="settings-grid-2col">
+          {/* Duplicate Handling */}
+          <div>
+            <label className="settings-label">
+              Duplicate File Detection Mode
+            </label>
+            <span className="settings-hint" style={{ marginBottom: '6px' }}>
+              Action taken when an upload matches the SHA-256 hash of an existing file.
+            </span>
+            <select
+              value={settings['duplicate_handling'] || 'allow'}
+              onChange={(e) => handleChange('duplicate_handling', e.target.value)}
+              className="settings-select"
+            >
+              <option value="allow">Allow duplicates (Store multiple copies)</option>
+              <option value="reuse">Reuse existing (Return existing media object)</option>
+              <option value="reject">Reject duplicates (Return 409 Conflict)</option>
+            </select>
+          </div>
+
+          {/* Trash Retention */}
+          <div>
+            <label className="settings-label">
+              Trash Retention Period (Days)
+            </label>
+            <span className="settings-hint" style={{ marginBottom: '6px' }}>
+              Number of days deleted media stays in the recycle bin before permanent pruning.
+            </span>
+            <input
+              type="number"
+              min="1"
+              max="365"
+              value={settings['trash_retention_days'] || '30'}
+              onChange={(e) => handleChange('trash_retention_days', e.target.value)}
+              className="settings-input"
+            />
+          </div>
         </div>
 
-        {/* Section: Allowed Image Formats */}
+        {/* Allowed Image Formats */}
         <div>
-          <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', display: 'block' }}>
+          <label className="settings-label">
             Allowed Image Formats
           </label>
-          <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+          <span className="settings-hint" style={{ marginBottom: '6px' }}>
             Comma-separated list of permitted image extensions (e.g. jpeg,jpg,png,webp,gif,avif,svg,bmp,ico,tiff,heic).
           </span>
           <input
@@ -820,25 +667,16 @@ export const SettingsPage: React.FC = () => {
             value={settings['allowed_image_formats'] || 'jpeg,jpg,png,webp,gif,avif,svg,bmp,ico,tiff,heic'}
             onChange={(e) => handleChange('allowed_image_formats', e.target.value)}
             placeholder="jpeg,jpg,png,webp,gif,avif,svg,bmp,ico,tiff,heic"
-            style={{
-              width: '100%',
-              background: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '6px',
-              padding: '8px 12px',
-              color: '#fff',
-              fontSize: '13px',
-              marginTop: '6px',
-            }}
+            className="settings-input"
           />
         </div>
 
-        {/* Section: Allowed Video Formats */}
+        {/* Allowed Video Formats */}
         <div>
-          <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', display: 'block' }}>
+          <label className="settings-label">
             Allowed Video Formats
           </label>
-          <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+          <span className="settings-hint" style={{ marginBottom: '6px' }}>
             Comma-separated list of permitted video extensions (e.g. mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp).
           </span>
           <input
@@ -846,43 +684,30 @@ export const SettingsPage: React.FC = () => {
             value={settings['allowed_video_formats'] || 'mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp'}
             onChange={(e) => handleChange('allowed_video_formats', e.target.value)}
             placeholder="mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp"
-            style={{
-              width: '100%',
-              background: 'var(--bg-tertiary)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '6px',
-              padding: '8px 12px',
-              color: '#fff',
-              fontSize: '13px',
-              marginTop: '6px',
-            }}
+            className="settings-input"
           />
         </div>
 
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="btn btn-primary press-scale"
-          style={{ alignSelf: 'flex-start', padding: '10px 22px', marginTop: '10px', fontSize: '13px', fontWeight: 600 }}
-        >
-          {saving ? 'Saving...' : 'Save Settings'}
-        </button>
-      </div>
+        {/* Bottom Save Button Row */}
+        <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+            Changes to domain topologies will prompt 1-click Caddy routing sync.
+          </span>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="btn btn-primary press-scale"
+            style={{ padding: '10px 24px', fontSize: '13px', fontWeight: 600, borderRadius: '8px' }}
+          >
+            {saving ? 'Saving...' : 'Save Settings'}
+          </button>
+        </div>
+      </section>
 
       {/* Interactive Post-Save Domain Routing Sync Modal */}
       {showUpdateModal && (
         <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            zIndex: 9999,
-            backgroundColor: 'rgba(0, 0, 0, 0.75)',
-            backdropFilter: 'blur(8px)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-          }}
+          className="settings-modal-backdrop"
           onClick={() => {
             if (updatePhase === 'idle' || updatePhase === 'completed' || updatePhase === 'error') {
               setShowUpdateModal(false);
@@ -890,44 +715,38 @@ export const SettingsPage: React.FC = () => {
           }}
         >
           <div
-            style={{
-              backgroundColor: 'var(--bg-secondary, #18181b)',
-              border: '1px solid var(--border-subtle, #27272a)',
-              borderRadius: '12px',
-              padding: '24px',
-              maxWidth: '560px',
-              width: '100%',
-              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
-            }}
+            className="settings-modal-card"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
               <span
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '8px',
-                  background: updatePhase === 'error' ? 'rgba(255, 69, 58, 0.15)' : 'rgba(48, 209, 88, 0.15)',
-                  color: updatePhase === 'error' ? '#ff453a' : '#30d158',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '10px',
+                  background: updatePhase === 'error' ? 'rgba(255, 69, 58, 0.15)' : 'rgba(255, 255, 255, 0.08)',
+                  color: updatePhase === 'error' ? '#ff453a' : '#ffffff',
                   fontSize: '16px',
+                  fontWeight: 600,
+                  border: '1px solid rgba(255, 255, 255, 0.12)',
                 }}
               >
                 {updatePhase === 'running' || updatePhase === 'reconnecting' ? '⚡' : (updatePhase === 'error' ? '!' : '✓')}
               </span>
               <div>
-                <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
                   {updatePhase === 'running' && 'Updating Server & Routing...'}
                   {updatePhase === 'reconnecting' && 'Restarting & Reconnecting...'}
                   {updatePhase === 'completed' && 'Update Applied Successfully!'}
                   {updatePhase === 'error' && 'Update Notice'}
                   {updatePhase === 'idle' && 'Domain Routing Saved'}
                 </h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
-                  {updatePhase === 'running' && 'Isolated background root execution via systemd'}
+                <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', display: 'block', marginTop: '2px' }}>
+                  {updatePhase === 'running' && 'Isolated background execution via systemd'}
                   {updatePhase === 'reconnecting' && 'Pinging /health until backend is ready'}
                   {updatePhase === 'completed' && 'Dashboard reloading automatically...'}
                   {updatePhase === 'error' && (updateError || 'An error occurred during update')}
@@ -947,67 +766,47 @@ export const SettingsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={handleTriggerUpdate}
-                  className="btn press-scale"
+                  className="btn btn-primary press-scale"
                   style={{
                     width: '100%',
                     padding: '12px 18px',
                     fontSize: '14px',
                     fontWeight: 600,
-                    color: '#fff',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     gap: '8px',
-                    background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-                    border: 'none',
                     borderRadius: '8px',
-                    marginBottom: '14px',
+                    marginBottom: '16px',
                     cursor: 'pointer',
                   }}
                 >
                   ⚡ Apply & Run Update Now (1-Click)
                 </button>
 
-                <div style={{ textAlign: 'center', margin: '12px 0', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                <div style={{ textAlign: 'center', margin: '14px 0', fontSize: '11px', color: 'var(--text-tertiary)', letterSpacing: '0.04em' }}>
                   — OR RUN MANUALLY IN VPS TERMINAL —
                 </div>
 
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    background: 'var(--bg-tertiary, #09090b)',
-                    border: '1px solid var(--border-subtle, #27272a)',
-                    borderRadius: '8px',
-                    padding: '10px 14px',
-                    marginBottom: '18px',
-                    gap: '8px',
-                  }}
-                >
-                  <code style={{ fontSize: '12px', color: '#38bdf8', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                <div className="settings-terminal-box">
+                  <code style={{ fontSize: '12px', color: 'var(--text-primary)', fontFamily: 'monospace', wordBreak: 'break-all' }}>
                     sudo bash /opt/ownmediahost/scripts/update.sh
                   </code>
                   <button
                     type="button"
                     onClick={handleCopyUpdateCommand}
-                    className="btn btn-secondary press-scale"
-                    style={{
-                      fontSize: '11px',
-                      padding: '5px 12px',
-                      whiteSpace: 'nowrap',
-                    }}
+                    className="btn btn-secondary press-scale settings-btn-sm"
                   >
                     {copiedUpdateCmd ? 'Copied!' : 'Copy'}
                   </button>
                 </div>
 
-                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
                   <button
                     type="button"
                     onClick={() => setShowUpdateModal(false)}
                     className="btn btn-secondary press-scale"
-                    style={{ padding: '8px 18px', fontSize: '12px' }}
+                    style={{ padding: '8px 18px', fontSize: '12px', borderRadius: '6px' }}
                   >
                     Dismiss
                   </button>
@@ -1024,8 +823,8 @@ export const SettingsPage: React.FC = () => {
                   ref={logTerminalRef}
                   style={{
                     background: '#09090b',
-                    color: '#38bdf8',
-                    border: '1px solid var(--border-subtle, #27272a)',
+                    color: '#f1f5f9',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
                     padding: '12px',
                     borderRadius: '8px',
                     maxHeight: '220px',
@@ -1048,19 +847,19 @@ export const SettingsPage: React.FC = () => {
             )}
 
             {updatePhase === 'reconnecting' && (
-              <div style={{ padding: '20px 0', textAlign: 'center' }}>
+              <div style={{ padding: '24px 0', textAlign: 'center' }}>
                 <div
                   style={{
                     width: '36px',
                     height: '36px',
                     margin: '0 auto 14px',
                     borderRadius: '50%',
-                    border: '3px solid rgba(99, 102, 241, 0.2)',
-                    borderTopColor: '#6366f1',
+                    border: '3px solid rgba(255, 255, 255, 0.15)',
+                    borderTopColor: '#ffffff',
                     animation: 'spin 1s linear infinite',
                   }}
                 />
-                <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
                   Restarting services & reconnecting...
                 </p>
                 <p style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
@@ -1070,11 +869,11 @@ export const SettingsPage: React.FC = () => {
             )}
 
             {updatePhase === 'completed' && (
-              <div style={{ padding: '20px 0', textAlign: 'center' }}>
+              <div style={{ padding: '24px 0', textAlign: 'center' }}>
                 <div
                   style={{
-                    width: '40px',
-                    height: '40px',
+                    width: '42px',
+                    height: '42px',
                     margin: '0 auto 14px',
                     borderRadius: '50%',
                     background: 'rgba(48, 209, 88, 0.15)',
@@ -1087,7 +886,7 @@ export const SettingsPage: React.FC = () => {
                 >
                   ✓
                 </div>
-                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                <p style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
                   Server Update Applied!
                 </p>
                 <p style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
@@ -1106,7 +905,7 @@ export const SettingsPage: React.FC = () => {
                     style={{
                       background: '#09090b',
                       color: '#f87171',
-                      border: '1px solid var(--border-subtle, #27272a)',
+                      border: '1px solid rgba(255, 255, 255, 0.1)',
                       padding: '10px',
                       borderRadius: '6px',
                       maxHeight: '140px',
@@ -1122,37 +921,24 @@ export const SettingsPage: React.FC = () => {
                 <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
                   You can always run the update manually in your VPS terminal:
                 </p>
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    background: 'var(--bg-tertiary, #09090b)',
-                    border: '1px solid var(--border-subtle, #27272a)',
-                    borderRadius: '8px',
-                    padding: '8px 12px',
-                    marginBottom: '16px',
-                    gap: '8px',
-                  }}
-                >
-                  <code style={{ fontSize: '12px', color: '#38bdf8', fontFamily: 'monospace' }}>
+                <div className="settings-terminal-box">
+                  <code style={{ fontSize: '12px', color: 'var(--text-primary)', fontFamily: 'monospace' }}>
                     sudo bash /opt/ownmediahost/scripts/update.sh
                   </code>
                   <button
                     type="button"
                     onClick={handleCopyUpdateCommand}
-                    className="btn btn-secondary press-scale"
-                    style={{ fontSize: '11px', padding: '4px 10px' }}
+                    className="btn btn-secondary press-scale settings-btn-sm"
                   >
                     {copiedUpdateCmd ? 'Copied!' : 'Copy'}
                   </button>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '16px' }}>
                   <button
                     type="button"
                     onClick={() => setShowUpdateModal(false)}
                     className="btn btn-primary press-scale"
-                    style={{ padding: '8px 18px', fontSize: '12px' }}
+                    style={{ padding: '8px 18px', fontSize: '12px', borderRadius: '6px' }}
                   >
                     Close
                   </button>
@@ -1162,6 +948,307 @@ export const SettingsPage: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Scoped Clean Apple Obsidian CSS */}
+      <style>{`
+        .settings-page-wrapper {
+          max-width: 920px;
+          margin: 0 auto;
+          width: 100%;
+          padding: 8px 16px 80px 16px;
+          display: flex;
+          flex-direction: column;
+          gap: 24px;
+        }
+
+        .settings-header-row {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+          flex-wrap: wrap;
+        }
+
+        .settings-title-group {
+          flex: 1;
+          min-width: 260px;
+        }
+
+        .settings-page-title {
+          font-size: 22px;
+          font-weight: 600;
+          letter-spacing: -0.02em;
+          margin: 0;
+          color: var(--text-primary);
+        }
+
+        .settings-page-subtitle {
+          font-size: 13px;
+          color: var(--text-secondary);
+          margin: 4px 0 0;
+          line-height: 1.5;
+        }
+
+        .settings-header-save-btn {
+          padding: 8px 20px;
+          font-size: 13px;
+          font-weight: 600;
+          border-radius: 8px;
+        }
+
+        .settings-card {
+          background: var(--bg-secondary);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 12px;
+          padding: 24px;
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+        }
+
+        .settings-card-header {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 16px;
+          flex-wrap: wrap;
+        }
+
+        .settings-card-title {
+          font-size: 15px;
+          font-weight: 600;
+          color: var(--text-primary);
+          margin: 0;
+        }
+
+        .settings-card-desc {
+          font-size: 12px;
+          color: var(--text-tertiary);
+          margin: 4px 0 0;
+          line-height: 1.45;
+        }
+
+        .settings-badge {
+          font-size: 11px;
+          padding: 3px 9px;
+          border-radius: 12px;
+          background: rgba(255, 255, 255, 0.08);
+          color: #f5f5f7;
+          font-weight: 500;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .settings-badge-subtle {
+          font-size: 10px;
+          background: rgba(255, 255, 255, 0.06);
+          color: var(--text-tertiary);
+          padding: 2px 7px;
+          border-radius: 4px;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .settings-topology-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 12px;
+        }
+
+        .settings-choice-card {
+          padding: 16px;
+          border-radius: 10px;
+          background: var(--bg-tertiary);
+          border: 1px solid var(--border-subtle);
+          cursor: pointer;
+          transition: all 0.15s ease;
+        }
+
+        .settings-choice-card.active {
+          background: rgba(255, 255, 255, 0.05);
+          border: 1.5px solid rgba(255, 255, 255, 0.28);
+        }
+
+        .settings-choice-card:hover:not(.active) {
+          border-color: rgba(255, 255, 255, 0.15);
+        }
+
+        .settings-recommended-pill {
+          font-size: 10px;
+          background: rgba(255, 255, 255, 0.1);
+          color: #f5f5f7;
+          padding: 2px 6px;
+          border-radius: 4px;
+          font-weight: 500;
+          border: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .settings-grid-2col {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+          gap: 16px;
+        }
+
+        .settings-label {
+          font-size: 12px;
+          font-weight: 500;
+          color: var(--text-primary);
+          display: block;
+          margin-bottom: 6px;
+        }
+
+        .settings-hint {
+          font-size: 11px;
+          color: var(--text-tertiary);
+          margin-top: 4px;
+          display: block;
+          line-height: 1.4;
+        }
+
+        .settings-input,
+        .settings-select {
+          width: 100%;
+          background: var(--bg-tertiary);
+          border: 1px solid var(--border-subtle);
+          border-radius: 7px;
+          padding: 9px 12px;
+          color: #fff;
+          font-size: 13px;
+          transition: border-color 0.15s ease;
+        }
+
+        .settings-input:focus,
+        .settings-select:focus {
+          outline: none;
+          border-color: rgba(255, 255, 255, 0.35);
+        }
+
+        .settings-notice-box {
+          padding: 10px 14px;
+          border-radius: 8px;
+          background: rgba(255, 255, 255, 0.03);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          font-size: 11.5px;
+          color: var(--text-secondary);
+          line-height: 1.5;
+        }
+
+        .settings-notice-box code {
+          background: rgba(0, 0, 0, 0.4);
+          padding: 1px 5px;
+          border-radius: 4px;
+          font-family: monospace;
+          color: #fff;
+        }
+
+        .settings-code-box {
+          width: 100%;
+          background: rgba(0, 0, 0, 0.45);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          border-radius: 7px;
+          padding: 9px 12px;
+          color: var(--text-primary);
+          font-family: var(--font-mono, monospace);
+          font-size: 12.5px;
+          user-select: all;
+          word-break: break-all;
+        }
+
+        .settings-btn-sm {
+          font-size: 11px;
+          padding: 5px 11px;
+          border-radius: 6px;
+        }
+
+        .settings-status-badge {
+          font-size: 10px;
+          padding: 2px 7px;
+          border-radius: 4px;
+          font-weight: 500;
+        }
+
+        .settings-status-badge.connected {
+          background: rgba(48, 209, 88, 0.12);
+          color: #30d158;
+          border: 1px solid rgba(48, 209, 88, 0.25);
+        }
+
+        .settings-status-badge.unlinked {
+          background: rgba(255, 255, 255, 0.06);
+          color: var(--text-tertiary);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .settings-link {
+          font-size: 12px;
+          color: var(--text-secondary);
+          text-decoration: none;
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          transition: color 0.15s ease;
+        }
+
+        .settings-link:hover {
+          color: var(--text-primary);
+          text-decoration: underline;
+        }
+
+        .settings-modal-backdrop {
+          position: fixed;
+          inset: 0;
+          z-index: 9999;
+          background-color: rgba(0, 0, 0, 0.75);
+          backdrop-filter: blur(10px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 20px;
+        }
+
+        .settings-modal-card {
+          background-color: var(--bg-secondary, #18181b);
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 14px;
+          padding: 24px;
+          max-width: 560px;
+          width: 100%;
+          box-shadow: 0 20px 50px rgba(0, 0, 0, 0.7);
+        }
+
+        .settings-terminal-box {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          background: #09090b;
+          border: 1px solid rgba(255, 255, 255, 0.1);
+          border-radius: 8px;
+          padding: 10px 14px;
+          gap: 8px;
+        }
+
+        @media (max-width: 640px) {
+          .settings-page-wrapper {
+            padding: 8px 12px 60px 12px;
+            gap: 18px;
+          }
+
+          .settings-card {
+            padding: 16px;
+            gap: 16px;
+          }
+
+          .settings-header-row {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .settings-header-save-btn {
+            width: 100%;
+          }
+        }
+      `}</style>
     </div>
   );
 };
