@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { api } from '../../api/client';
 
 export type PageView =
   | 'media'
@@ -28,6 +29,44 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onCloseMobile,
 }) => {
   const { user, logout } = useAuth();
+  const [statusUrl, setStatusUrl] = useState<string>('/status/');
+  const [healthStatus, setHealthStatus] = useState<'operational' | 'degraded' | 'offline'>('operational');
+
+  useEffect(() => {
+    let mounted = true;
+    const checkHealthAndSettings = async () => {
+      try {
+        const health = await api.getHealth();
+        if (mounted) {
+          if (health.status === 'operational') {
+            setHealthStatus('operational');
+          } else if (health.status === 'degraded') {
+            setHealthStatus('degraded');
+          } else {
+            setHealthStatus('offline');
+          }
+        }
+      } catch {
+        if (mounted) setHealthStatus('offline');
+      }
+
+      try {
+        const settings = await api.getSettings();
+        if (mounted && settings && settings.status_page_url) {
+          setStatusUrl(settings.status_page_url.trim());
+        }
+      } catch {
+        // use default /status/
+      }
+    };
+
+    checkHealthAndSettings();
+    const interval = setInterval(checkHealthAndSettings, 45000);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, []);
 
   const navItems: { id: PageView; label: string; icon: React.ReactNode }[] = [
     {
@@ -248,7 +287,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {/* Out-of-Band System Status Link */}
           <div style={{ padding: '4px 12px 10px' }}>
             <a
-              href="/status/"
+              href={statusUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="press-scale"
@@ -265,9 +304,34 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 border: '1px dashed var(--border-subtle)',
                 transition: 'all 120ms ease',
               }}
+              title={
+                healthStatus === 'operational'
+                  ? 'All systems operational — click to view 24/7 public status'
+                  : 'Service degradation detected — click to view 24/7 public status'
+              }
             >
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#2ea043' }} />
-              <span>System Status</span>
+              <span
+                style={{
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background:
+                    healthStatus === 'operational'
+                      ? '#2ea043'
+                      : healthStatus === 'degraded'
+                      ? '#d29922'
+                      : '#f85149',
+                  boxShadow:
+                    healthStatus === 'operational'
+                      ? '0 0 6px rgba(46, 160, 67, 0.4)'
+                      : healthStatus === 'degraded'
+                      ? '0 0 6px rgba(210, 153, 34, 0.4)'
+                      : '0 0 6px rgba(248, 81, 73, 0.4)',
+                }}
+              />
+              <span style={{ color: healthStatus === 'operational' ? 'var(--text-secondary)' : '#f85149' }}>
+                {healthStatus === 'operational' ? 'Status: Operational' : healthStatus === 'degraded' ? 'Status: Degraded' : 'Status: Offline'}
+              </span>
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto', opacity: 0.6 }}>
                 <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
                 <polyline points="15 3 21 3 21 9"/>

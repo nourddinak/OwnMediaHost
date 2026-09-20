@@ -435,8 +435,8 @@ interactive_wizard() {
     # Decoupled Public Status Page (Optional)
     if [[ -z "$STATUS_DOMAIN" && -z "$STATUS_URL" ]]; then
         echo -e "\n${BOLD}=== Step 1b: Public Status Page (Incident Communication) ===${RESET}"
-        echo -e "An out-of-band status page can be deployed on a separate domain (e.g. ${CYAN}status.example.com${RESET})"
-        echo -e "or connected to an existing GitHub Pages site (${CYAN}https://user.github.io/OwnMediaHost-status/${RESET})."
+        echo -e "An out-of-band status page can be deployed on a separate domain (e.g. ${CYAN}status.yourdomain.com${RESET})"
+        echo -e "or connected to Better Stack (${CYAN}https://status.yourdomain.com${RESET} / ${CYAN}https://yourname.betteruptime.com${RESET})."
         local user_status
         prompt_read "Enter status domain or URL [optional, press Enter to skip]: " user_status ""
         if [[ "$user_status" =~ ^https?:// ]]; then
@@ -808,6 +808,7 @@ setup_status_page() {
     as_root mkdir -p "${status_target}"
 
     if [ -d "${REPO_DIR}/status" ] && [ -f "${REPO_DIR}/status/index.html" ]; then
+        as_root rm -rf "${status_target:?}"/* 2>/dev/null || true
         as_root cp -rf "${REPO_DIR}/status/"* "${status_target}/"
         as_root chown -R www-data:www-data /var/www/ownmediahost/status 2>/dev/null || true
         log_success "Decoupled status page assets deployed to ${status_target}"
@@ -1220,8 +1221,8 @@ main() {
     setup_storage_and_user
     build_backend
     build_frontend
-    setup_status_page
     generate_env_file
+    setup_status_page
     setup_systemd
     configure_caddy
     verify_deployment

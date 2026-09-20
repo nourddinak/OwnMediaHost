@@ -1,0 +1,11 @@
+# Standalone Status Page Repository .gitignore
+.DS_Store
+Thumbs.db
+desktop.ini
+*.log
+.idea/
+.vscode/
+*.swp
+*.bak
+*~
+CNAME

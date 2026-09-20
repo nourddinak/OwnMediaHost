@@ -169,11 +169,11 @@ export const SettingsPage: React.FC = () => {
           />
         </div>
 
-        {/* Public Status Page (Out-of-Band / GitHub Pages) */}
+        {/* Public Status Page (Better Stack / Out-of-Band) */}
         <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '16px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
             <label style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)' }}>
-              Public Out-of-Band Status Page URL
+              Public Out-of-Band Status Page (Better Stack / Custom Domain)
             </label>
             <a
               href={settings['status_page_url'] || '/status/'}
@@ -188,17 +188,17 @@ export const SettingsPage: React.FC = () => {
                 gap: '4px',
               }}
             >
-              Open Status Dashboard ↗
+              Open Status Page ↗
             </a>
           </div>
           <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', lineHeight: 1.5 }}>
-            Link to your public status page (e.g. deployed to GitHub Pages at <code>https://username.github.io/OwnMediaHost/</code> or a custom domain like <code>https://status.example.com</code>).
+            Configure your custom status page URL (e.g. <code>https://status.yourdomain.com</code> via DNS CNAME to Better Stack, or your hosted Better Stack URL). Provides 100% automated 24/7 downtime recording down to the second.
           </span>
           <input
             type="text"
             value={settings['status_page_url'] || ''}
             onChange={(e) => handleChange('status_page_url', e.target.value)}
-            placeholder="https://yourname.github.io/OwnMediaHost/ or https://status.yourdomain.com"
+            placeholder="https://status.yourdomain.com or https://yourname.betteruptime.com"
             style={{
               width: '100%',
               background: 'var(--bg-tertiary)',

@@ -317,4 +317,15 @@ export const api = {
   getSettings: () => request<Record<string, string>>('/settings'),
   updateSettings: (settings: Record<string, string>) =>
     request('/settings', { method: 'PATCH', body: JSON.stringify({ settings }) }),
+  getHealth: async (): Promise<{ status: string }> => {
+    try {
+      const res = await fetch('/health', { cache: 'no-store' });
+      if (res.ok) {
+        return await res.json();
+      }
+      return { status: 'degraded' };
+    } catch {
+      return { status: 'offline' };
+    }
+  },
 };

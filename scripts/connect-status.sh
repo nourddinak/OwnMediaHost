@@ -11,7 +11,7 @@
 #      sudo bash /opt/ownmediahost/scripts/connect-status.sh
 #
 #   2. Specify Status Page URL:
-#      sudo bash /opt/ownmediahost/scripts/connect-status.sh "https://nourddinak.github.io/OwnMediaHost-status/"
+#      sudo bash /opt/ownmediahost/scripts/connect-status.sh "https://status.yourdomain.com"
 #
 #   3. Using flag:
 #      sudo bash /opt/ownmediahost/scripts/connect-status.sh --url "https://status.example.com"
@@ -247,8 +247,8 @@ if [ -z "$STATUS_URL" ]; then
 
     echo -e "Enter your public status page URL."
     echo -e "Examples:"
-    echo -e "  • GitHub Pages: ${CYAN}https://nourddinak.github.io/OwnMediaHost-status/${RESET}"
-    echo -e "  • Custom Domain: ${CYAN}https://status.yourdomain.com${RESET}"
+    echo -e "  • Better Stack Custom Domain: ${CYAN}https://status.yourdomain.com${RESET}"
+    echo -e "  • Better Stack Hosted: ${CYAN}https://yourname.betteruptime.com${RESET}"
     echo ""
     read -rp "Status Page URL: " INPUT_URL
     STATUS_URL="${INPUT_URL:-$CURRENT_STATUS_URL}"
@@ -310,7 +310,7 @@ echo -e "  ${BOLD}Status Page:${RESET}    ${CYAN}${STATUS_URL}${RESET}"
 echo -e "  ${BOLD}CORS Origin:${RESET}    ${CYAN}${STATUS_ORIGIN}${RESET}"
 echo -e "  ${BOLD}Config File:${RESET}    ${DIM}${ENV_FILE}${RESET}"
 echo -e "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo -e "\n${BOLD}Next steps on your status page:${RESET}"
-echo -e "  1. Open ${CYAN}${STATUS_URL}${RESET} in your browser."
-echo -e "  2. If it does not auto-detect, click ${BOLD}Target${RESET} in the top nav and connect your API."
-echo -e "  3. To deploy your own status repo, fork: ${CYAN}https://github.com/nourddinak/OwnMediaHost-status${RESET}\n"
+echo -e "\n${BOLD}Next steps for 24/7 automated downtime recording:${RESET}"
+echo -e "  1. In Better Stack, set up monitor targeting: ${CYAN}https://media.yourdomain.com/health${RESET}"
+echo -e "  2. Point DNS CNAME ${CYAN}status${RESET} to ${CYAN}statuspage.betteruptime.com${RESET}"
+echo -e "  3. Open ${CYAN}${STATUS_URL}${RESET} to verify real-time incident and downtime tracking.\n"

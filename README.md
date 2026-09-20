@@ -73,7 +73,7 @@ sqlite3 /var/lib/ownmediahost/storage/database/media.db
 
 **Connect public status page (1-Click)**
 ```bash
-sudo bash /opt/ownmediahost/scripts/connect-status.sh "https://nourddinak.github.io/OwnMediaHost-status/"
+sudo bash /opt/ownmediahost/scripts/connect-status.sh "https://status.yourdomain.com"
 ```
 
 **Test live telemetry & CORS connectivity**
@@ -104,7 +104,7 @@ OwnMediaHost gives you a dedicated bare-metal alternative to Cloudinary, ImageKi
 
 - **Your VPS & Pure Bare-Metal Performance**: Runs natively on your server with direct disk I/O, SIMD image acceleration, and native systemd management.
 - **Permanent Clean URLs**: Clean permanent links (`/f/7fd92abc/photo.jpg`) and stable vanity aliases (`/a/profile/avatar`).
-- **Decoupled Incident Communication & Status Page**: Out-of-band public status platform ([OwnMediaHost-status](https://github.com/nourddinak/OwnMediaHost-status) / [Live Demo](https://nourddinak.github.io/OwnMediaHost-status/)) that survives primary backend outages with zero-dependency client health probing, synthetic telemetry, and real-time incident feeds.
+- **Decoupled Incident Communication & Status Page**: Out-of-band public status platform powered by Better Stack on a dedicated DNS CNAME (`status.yourdomain.com`) that survives primary backend outages with 100% automated 24/7 downtime tracking (to the second), real-time incident post-mortems, and 90-day SLA history.
 - **Browser-Native Canvas & Video Thumbnails**: Ultra-fast video frame and image thumbnail generation directly in the browser using HTML5 `<canvas>` and `<video>` elements—eliminating server-side CPU spikes and heavy external dependencies.
 - **Pure Rust Image Processing**: High-speed, SIMD-accelerated image scaling and format handling via native Rust libraries with zero external command-line utilities.
 - **Streaming Media Uploads & Format Whitelisting**: High-throughput streaming multipart uploads with zero disk buffering and no orphan chunks, backed by configurable image and video format whitelists (`ALLOWED_IMAGE_FORMATS`, `ALLOWED_VIDEO_FORMATS`).

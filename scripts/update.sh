@@ -288,6 +288,7 @@ fi
 if [ -d "${REPO_DIR}/status" ] && [ -f "${REPO_DIR}/status/index.html" ]; then
     log_info "Synchronizing public status page assets from local files..."
     as_root mkdir -p /var/www/ownmediahost/status
+    as_root rm -rf /var/www/ownmediahost/status/* 2>/dev/null || true
     as_root cp -rf "${REPO_DIR}/status/"* /var/www/ownmediahost/status/
     as_root chown -R www-data:www-data /var/www/ownmediahost/status 2>/dev/null || true
     log_success "Public status page assets refreshed."

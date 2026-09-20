@@ -72,5 +72,3 @@ logs/
 tmp/
 temp/
 
-# --- Decoupled Standalone Repositories ---
-status/

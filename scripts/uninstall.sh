@@ -226,8 +226,9 @@ if [ -f /etc/caddy/Caddyfile ]; then
     log_info "Removing OwnMediaHost routing rules from /etc/caddy/Caddyfile..."
     # Create backup first
     as_root cp /etc/caddy/Caddyfile "/etc/caddy/Caddyfile.bak.uninstall.$(date +%s)"
-    # Strip blocks (both clean divider banner and legacy markers)
+    # Strip blocks (both clean divider banner, status page, and legacy markers)
     as_root sed -i '/# =* OwnMediaHost =*/,/# =* End OwnMediaHost =*/d' /etc/caddy/Caddyfile
+    as_root sed -i '/# =* Status Page =*/,/# =* End Status Page =*/d' /etc/caddy/Caddyfile
     as_root sed -i '/# >>> OwnMediaHost block >>>/,/# <<< OwnMediaHost block <<</d' /etc/caddy/Caddyfile
     as_root sed -i '/# >>> SELFmedia block >>>/,/# <<< SELFmedia block <<</d' /etc/caddy/Caddyfile
 
