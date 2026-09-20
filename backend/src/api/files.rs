@@ -1102,16 +1102,28 @@ pub async fn format_media_responses_batch(
     // 4. Construct responses in memory
     let mut responses = Vec::with_capacity(media_list.len());
     for m in media_list {
-        let url = if m.visibility == "private" {
-            format!("{}/private/{}", config.public_base_url, m.public_id)
+        let (url, thumbnail_url) = if m.visibility == "private" {
+            // Generate a 24-hour signed preview URL for authenticated dashboard/API access
+            let expires = chrono::Utc::now().timestamp() + 86400;
+            let signature = sign_private_url(&config.private_url_signing_key, &m.public_id, expires);
+            let signed_url = format!(
+                "{}/private/{}?expires={}&signature={}",
+                config.public_base_url, m.public_id, expires, signature
+            );
+            let thumb = if m.media_type == "video" {
+                format!("{}/thumbnails/{}.jpg", config.public_base_url, m.public_id)
+            } else {
+                signed_url.clone()
+            };
+            (signed_url, Some(thumb))
         } else {
-            format!("{}/f/{}/{}", config.public_base_url, m.public_id, m.filename)
-        };
-
-        let thumbnail_url = if m.media_type == "video" {
-            Some(format!("{}/thumbnails/{}.jpg", config.public_base_url, m.public_id))
-        } else {
-            Some(format!("{}/f/{}/{}", config.public_base_url, m.public_id, m.filename))
+            let direct_url = format!("{}/f/{}/{}", config.public_base_url, m.public_id, m.filename);
+            let thumb = if m.media_type == "video" {
+                format!("{}/thumbnails/{}.jpg", config.public_base_url, m.public_id)
+            } else {
+                direct_url.clone()
+            };
+            (direct_url, Some(thumb))
         };
 
         let folder_name = m.folder_id.as_ref().and_then(|f_id| folder_map.get(f_id).cloned());
