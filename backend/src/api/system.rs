@@ -61,6 +61,24 @@ async fn trigger_update(
     let log_path = get_log_path(&state.config);
     let trigger_path = get_trigger_path(&state.config);
 
+    if trigger_path.exists() {
+        return Err(AppError::Conflict("An update is already queued or in progress".into()));
+    }
+
+    let lock_path = std::path::Path::new("/tmp/ownmediahost-update.lock");
+    if lock_path.exists() {
+        if let Ok(pid_str) = std::fs::read_to_string(lock_path) {
+            if let Ok(pid) = pid_str.trim().parse::<u32>() {
+                let s = sysinfo::System::new_with_specifics(
+                    sysinfo::RefreshKind::nothing().with_processes(sysinfo::ProcessRefreshKind::everything())
+                );
+                if s.process(sysinfo::Pid::from_u32(pid)).is_some() {
+                    return Err(AppError::Conflict("An update process is already actively running on the host".into()));
+                }
+            }
+        }
+    }
+
     if let Some(parent) = trigger_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }

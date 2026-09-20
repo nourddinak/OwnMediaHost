@@ -60,6 +60,7 @@ REPO_DIR="${TARGET_INSTALL_DIR}"
 
 BUILD_FROM_SOURCE=false
 USE_PRECOMPILED=false
+FORCE_UPDATE=false
 STATUS_DOMAIN_CLI=""
 STATUS_URL_CLI=""
 while [[ $# -gt 0 ]]; do
@@ -70,6 +71,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --precompiled|--fast)
             USE_PRECOMPILED=true
+            shift
+            ;;
+        --force|-f)
+            FORCE_UPDATE=true
             shift
             ;;
         --status-domain)
@@ -91,6 +96,29 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Single-instance lock to prevent overlapping updates
+LOCK_FILE="/tmp/ownmediahost-update.lock"
+if [ -f "$LOCK_FILE" ]; then
+    OLD_PID=$(cat "$LOCK_FILE" 2>/dev/null || echo "")
+    if [ -n "$OLD_PID" ] && kill -0 "$OLD_PID" 2>/dev/null && [ "$OLD_PID" != "$$" ]; then
+        if [[ "$FORCE_UPDATE" == true ]]; then
+            log_warn "Another update process (PID: $OLD_PID) is running. Terminating due to --force..."
+            as_root kill -9 "$OLD_PID" 2>/dev/null || true
+            as_root pkill -f "cargo.*ownmediahost" 2>/dev/null || true
+        else
+            log_warn "An update process is already running (PID: $OLD_PID)."
+            log_info "To cancel the previous update and restart immediately, run: sudo bash $0 --force"
+            exit 0
+        fi
+    fi
+fi
+echo "$$" | as_root tee "$LOCK_FILE" >/dev/null
+
+cleanup_update_lock() {
+    as_root rm -f "$LOCK_FILE" 2>/dev/null || true
+}
+trap cleanup_update_lock EXIT INT TERM
 
 if [ -n "${BASH_SOURCE[0]:-}" ] && [[ "${BASH_SOURCE[0]}" != *"/fd/"* ]] && [ -f "${BASH_SOURCE[0]}" ]; then
     CURRENT_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -123,6 +151,13 @@ as_root chown -R "$(id -u):$(id -g)" "${REPO_DIR}" 2>/dev/null || true
 log_info "Fetching latest code from Git in ${REPO_DIR}..."
 if [ -d .git ]; then
     as_root git pull --rebase || true
+fi
+
+# If running via pipe/curl, hand over execution to freshly updated local script
+if [[ "${RUN_FROM_LOCAL:-false}" != true ]] && [ -f "${REPO_DIR}/scripts/update.sh" ]; then
+    export RUN_FROM_LOCAL=true
+    log_info "Handing over to fresh local updater script..."
+    exec bash "${REPO_DIR}/scripts/update.sh" "$@"
 fi
 
 # Ensure /etc/ownmediahost/ownmediahost.env exists
@@ -161,6 +196,9 @@ release_backend_url="https://github.com/nourddinak/OwnMediaHost/releases/latest/
 tmp_tar="/tmp/ownmediahost-backend-linux-amd64.tar.gz"
 as_root rm -f "$tmp_tar"
 
+# Terminate any lingering background cargo processes targeting ownmediahost to free VPS CPU
+as_root pkill -f "cargo.*ownmediahost" 2>/dev/null || true
+
 CARGO_ENV=""
 for candidate in \
     "/root/.cargo/env" \
@@ -180,15 +218,23 @@ if [ -n "$CARGO_ENV" ] || have cargo; then
 fi
 
 # Try downloading precompiled binary first (built automatically by GitHub Actions)
-if [[ "$BUILD_FROM_SOURCE" != true ]] && curl -fsSL -o "$tmp_tar" "$release_backend_url" 2>/dev/null && [ -s "$tmp_tar" ]; then
-    tmp_extract="/tmp/ownmediahost-bin-extract"
-    as_root rm -rf "$tmp_extract"
-    as_root mkdir -p "$tmp_extract"
-    if as_root tar -xzf "$tmp_tar" -C "$tmp_extract" 2>/dev/null && [ -f "$tmp_extract/ownmediahost-backend" ]; then
-        as_root install -m 755 "$tmp_extract/ownmediahost-backend" /usr/local/bin/ownmediahost-backend
-        as_root rm -rf "$tmp_tar" "$tmp_extract"
-        log_success "Instant update: Precompiled backend binary installed to /usr/local/bin/ownmediahost-backend"
-        binary_updated=true
+if [[ "$BUILD_FROM_SOURCE" != true ]]; then
+    log_info "Downloading precompiled backend release from GitHub..."
+    if as_root curl -fL --connect-timeout 15 --retry 2 -o "$tmp_tar" "$release_backend_url" && [ -s "$tmp_tar" ]; then
+        log_info "Extracting precompiled binary..."
+        tmp_extract="/tmp/ownmediahost-bin-extract"
+        as_root rm -rf "$tmp_extract"
+        as_root mkdir -p "$tmp_extract"
+        if as_root tar -xzf "$tmp_tar" -C "$tmp_extract" && [ -f "$tmp_extract/ownmediahost-backend" ]; then
+            as_root install -m 755 "$tmp_extract/ownmediahost-backend" /usr/local/bin/ownmediahost-backend
+            as_root rm -rf "$tmp_tar" "$tmp_extract"
+            log_success "Instant update: Precompiled backend binary installed to /usr/local/bin/ownmediahost-backend"
+            binary_updated=true
+        else
+            log_warn "Failed to extract precompiled archive."
+        fi
+    else
+        log_warn "Precompiled release binary not downloaded."
     fi
 fi
 
