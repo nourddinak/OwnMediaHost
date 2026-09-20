@@ -8,11 +8,15 @@ on:
       - 'v*'
   workflow_dispatch:
 
+concurrency:
+  group: release-pipeline
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  build:
     name: Build Linux x86_64 Binaries
     runs-on: ubuntu-22.04
 
@@ -51,9 +55,42 @@ jobs:
           tar -czf ../ownmediahost-frontend-dist.tar.gz -C dist .
           cd ..
 
-      - name: Generate Checksums
+      - name: Generate and Validate Checksums
         run: |
           sha256sum ownmediahost-backend-linux-amd64.tar.gz ownmediahost-frontend-dist.tar.gz > SHA256SUMS
+          sha256sum -c SHA256SUMS
+          ls -lh ownmediahost-backend-linux-amd64.tar.gz ownmediahost-frontend-dist.tar.gz SHA256SUMS
+
+      - name: Stage Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets
+          path: |
+            ownmediahost-backend-linux-amd64.tar.gz
+            ownmediahost-frontend-dist.tar.gz
+            SHA256SUMS
+          if-no-files-found: error
+          retention-days: 1
+
+  release:
+    name: Publish Production Release
+    needs: build
+    if: success()
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Retrieve Built Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets
+          path: .
+
+      - name: Verify Staged Asset Hashes
+        run: |
+          sha256sum -c SHA256SUMS
+          ls -lh ownmediahost-backend-linux-amd64.tar.gz ownmediahost-frontend-dist.tar.gz SHA256SUMS
 
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
@@ -64,12 +101,17 @@ jobs:
           name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'OwnMediaHost Latest (Precompiled)' }}
           body: |
             Automated production release of OwnMediaHost for bare-metal VPS.
-            
+
+            ### Build Information
+            - **Commit**: `${{ github.sha }}`
+            - **Branch/Ref**: `${{ github.ref_name }}`
+            - **Triggered By**: `${{ github.actor }}`
+
             ### Included Assets:
             - **ownmediahost-backend-linux-amd64.tar.gz**: Precompiled Rust backend binary (optimized release build).
             - **ownmediahost-frontend-dist.tar.gz**: Precompiled React frontend SPA bundle.
             - **SHA256SUMS**: Cryptographic file checksums.
-            
+
             *Instant installation: `deploy.sh` and `update.sh` automatically detect and download these assets in ~5 seconds, skipping VPS compilation.*
           draft: false
           prerelease: false
