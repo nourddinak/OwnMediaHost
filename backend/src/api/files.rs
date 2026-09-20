@@ -345,7 +345,7 @@ async fn upload_file(
 
     // Generate public ID (clean 8-character hex) and media ID
     let media_id = format!("med_{}", uuid::Uuid::new_v4().simple());
-    let public_id = hex::encode(&rand::random::<[u8; 4]>());
+    let public_id = hex::encode(rand::random::<[u8; 4]>());
 
     let processed = process_media_payload(
         &state.storage,

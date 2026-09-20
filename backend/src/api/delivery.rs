@@ -168,7 +168,7 @@ pub async fn serve_file_with_range(
                         (Some(s), Some(e)) => (s, e.min(file_size - 1)),
                         (Some(s), None) => (s, file_size - 1),
                         (None, Some(e)) => {
-                            let s = if e >= file_size { 0 } else { file_size - e };
+                            let s = file_size.saturating_sub(e);
                             (s, file_size - 1)
                         }
                         (None, None) => (0, file_size - 1),

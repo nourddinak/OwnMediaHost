@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { api, FolderItem } from '../../api/client';
 import { useToast } from '../../context/ToastContext';
 import { generateClientMediaMeta } from '../../utils/thumbnail';
+import { formatMB } from '../../utils/formatters';
 
 interface UploadDrawerProps {
   isOpen: boolean;
@@ -343,7 +344,7 @@ export const UploadDrawer: React.FC<UploadDrawerProps> = ({
                     </span>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                       <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                        {(item.file.size / 1024 / 1024).toFixed(1)} MB
+                        {formatMB(item.file.size)} MB
                       </span>
                       {item.status === 'completed' && (
                         <span style={{ color: 'var(--accent-green)', fontSize: '12px' }}>✓</span>

@@ -85,12 +85,68 @@ impl AppConfig {
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|_| "AdminSecurePass2026!".to_string());
 
-        let allowed_origins = std::env::var("ALLOWED_ORIGINS")
+        let mut allowed_origins: Vec<String> = std::env::var("ALLOWED_ORIGINS")
             .unwrap_or_else(|_| "http://localhost:5173,http://localhost:8080".to_string())
             .split(',')
             .map(|s| s.trim().to_string())
             .filter(|s| !s.is_empty())
             .collect();
+
+        // Automatically include FRONTEND_DOMAIN if configured
+        if let Ok(fd) = std::env::var("FRONTEND_DOMAIN") {
+            let clean = fd.trim();
+            if !clean.is_empty() {
+                let clean_host = clean
+                    .trim_start_matches("https://")
+                    .trim_start_matches("http://")
+                    .trim_end_matches('/');
+                allowed_origins.push(format!("https://{}", clean_host));
+                allowed_origins.push(format!("http://{}", clean_host));
+                allowed_origins.push(clean_host.to_string());
+            }
+        }
+
+        // Automatically include DOMAIN if configured
+        if let Ok(d) = std::env::var("DOMAIN") {
+            let clean = d.trim();
+            if !clean.is_empty() {
+                let clean_host = clean
+                    .trim_start_matches("https://")
+                    .trim_start_matches("http://")
+                    .trim_end_matches('/');
+                allowed_origins.push(format!("https://{}", clean_host));
+                allowed_origins.push(format!("http://{}", clean_host));
+                allowed_origins.push(clean_host.to_string());
+            }
+        }
+
+        // Automatically include STATUS_DOMAIN and STATUS_PAGE_URL if configured
+        for env_var in ["STATUS_DOMAIN", "STATUS_PAGE_URL"] {
+            if let Ok(val) = std::env::var(env_var) {
+                let clean = val.trim();
+                if !clean.is_empty() {
+                    let clean_host = clean
+                        .trim_start_matches("https://")
+                        .trim_start_matches("http://")
+                        .trim_end_matches('/');
+                    allowed_origins.push(format!("https://{}", clean_host));
+                    allowed_origins.push(format!("http://{}", clean_host));
+                }
+            }
+        }
+
+        // Automatically include PUBLIC_BASE_URL if configured
+        let clean_pub = public_base_url.trim();
+        if !clean_pub.is_empty() {
+            let clean_host = clean_pub
+                .trim_start_matches("https://")
+                .trim_start_matches("http://")
+                .trim_end_matches('/');
+            allowed_origins.push(format!("https://{}", clean_host));
+            allowed_origins.push(format!("http://{}", clean_host));
+        }
+
+        allowed_origins.dedup();
 
         let ffmpeg_path = std::env::var("FFMPEG_PATH").unwrap_or_else(|_| "ffmpeg".to_string());
         let ffprobe_path = std::env::var("FFPROBE_PATH").unwrap_or_else(|_| "ffprobe".to_string());

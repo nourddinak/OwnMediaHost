@@ -53,12 +53,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Method::PATCH,
             Method::DELETE,
             Method::OPTIONS,
+            Method::HEAD,
         ])
         .allow_headers([
             header::AUTHORIZATION,
             header::CONTENT_TYPE,
             header::ACCEPT,
             header::RANGE,
+            header::ORIGIN,
+            header::COOKIE,
+            header::ACCESS_CONTROL_REQUEST_METHOD,
+            header::ACCESS_CONTROL_REQUEST_HEADERS,
             header::HeaderName::from_static("x-request-id"),
             header::HeaderName::from_static("x-api-key"),
         ])
@@ -70,6 +75,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     Ok(s) => s,
                     Err(_) => return false,
                 };
+
+                // Direct match or wildcard
                 if allowed_origins.iter().any(|o| {
                     o == "*"
                         || o == origin_str
@@ -77,16 +84,44 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }) {
                     return true;
                 }
+
+                let clean_orig = origin_str
+                    .trim_start_matches("https://")
+                    .trim_start_matches("http://")
+                    .trim_end_matches('/');
+
+                // Localhost / loopback check
+                if clean_orig.starts_with("localhost") || clean_orig.starts_with("127.0.0.1") {
+                    return true;
+                }
+
+                // Domain & subdomain matching
                 allowed_origins.iter().any(|o| {
                     let clean_o = o
                         .trim_start_matches("https://")
                         .trim_start_matches("http://")
                         .trim_end_matches('/');
-                    let clean_orig = origin_str
-                        .trim_start_matches("https://")
-                        .trim_start_matches("http://")
-                        .trim_end_matches('/');
-                    !clean_o.is_empty() && clean_o == clean_orig
+                    if clean_o.is_empty() {
+                        return false;
+                    }
+                    if clean_o == clean_orig {
+                        return true;
+                    }
+                    // Subdomain match (e.g. media.domain.com matching domain.com)
+                    if clean_orig.ends_with(&format!(".{}", clean_o)) {
+                        return true;
+                    }
+                    // Sister subdomain match (e.g. media.domain.com and api.domain.com sharing domain.com)
+                    let parts_o: Vec<&str> = clean_o.split('.').collect();
+                    let parts_orig: Vec<&str> = clean_orig.split('.').collect();
+                    if parts_o.len() >= 2 && parts_orig.len() >= 2 {
+                        let apex_o = format!("{}.{}", parts_o[parts_o.len() - 2], parts_o[parts_o.len() - 1]);
+                        let apex_orig = format!("{}.{}", parts_orig[parts_orig.len() - 2], parts_orig[parts_orig.len() - 1]);
+                        if apex_o == apex_orig {
+                            return true;
+                        }
+                    }
+                    false
                 })
             }
         }));

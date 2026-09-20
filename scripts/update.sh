@@ -59,12 +59,17 @@ TARGET_INSTALL_DIR="/opt/ownmediahost"
 REPO_DIR="${TARGET_INSTALL_DIR}"
 
 BUILD_FROM_SOURCE=false
+USE_PRECOMPILED=false
 STATUS_DOMAIN_CLI=""
 STATUS_URL_CLI=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        --build-from-source|-b)
+        --build-from-source|-b|--compile)
             BUILD_FROM_SOURCE=true
+            shift
+            ;;
+        --precompiled|--fast)
+            USE_PRECOMPILED=true
             shift
             ;;
         --status-domain)
@@ -156,35 +161,41 @@ release_backend_url="https://github.com/nourddinak/OwnMediaHost/releases/latest/
 tmp_tar="/tmp/ownmediahost-backend-linux-amd64.tar.gz"
 as_root rm -f "$tmp_tar"
 
-if [[ "$BUILD_FROM_SOURCE" != true ]] && curl -fsSL -o "$tmp_tar" "$release_backend_url" 2>/dev/null && [ -s "$tmp_tar" ]; then
-    tmp_extract="/tmp/ownmediahost-bin-extract"
-    as_root rm -rf "$tmp_extract"
-    as_root mkdir -p "$tmp_extract"
-    if as_root tar -xzf "$tmp_tar" -C "$tmp_extract" 2>/dev/null && [ -f "$tmp_extract/ownmediahost-backend" ]; then
-        as_root install -m 755 "$tmp_extract/ownmediahost-backend" /usr/local/bin/ownmediahost-backend
-        as_root rm -rf "$tmp_tar" "$tmp_extract"
-        log_success "Instant update: Precompiled backend binary installed to /usr/local/bin/ownmediahost-backend"
-        binary_updated=true
+CARGO_ENV=""
+for candidate in \
+    "/root/.cargo/env" \
+    "$HOME/.cargo/env" \
+    "/home/$(logname 2>/dev/null)/.cargo/env" \
+    /home/*/.cargo/env; do
+    if [ -f "$candidate" ]; then
+        CARGO_ENV="$candidate"
+        break
+    fi
+done
+
+# Check if rust/cargo toolchain is available on the machine
+HAS_CARGO=false
+if [ -n "$CARGO_ENV" ] || have cargo; then
+    HAS_CARGO=true
+fi
+
+# If precompiled requested or cargo not installed, try downloading release binary
+if [[ "$BUILD_FROM_SOURCE" != true ]] && [[ "$HAS_CARGO" != true || "$USE_PRECOMPILED" == true ]]; then
+    if curl -fsSL -o "$tmp_tar" "$release_backend_url" 2>/dev/null && [ -s "$tmp_tar" ]; then
+        tmp_extract="/tmp/ownmediahost-bin-extract"
+        as_root rm -rf "$tmp_extract"
+        as_root mkdir -p "$tmp_extract"
+        if as_root tar -xzf "$tmp_tar" -C "$tmp_extract" 2>/dev/null && [ -f "$tmp_extract/ownmediahost-backend" ]; then
+            as_root install -m 755 "$tmp_extract/ownmediahost-backend" /usr/local/bin/ownmediahost-backend
+            as_root rm -rf "$tmp_tar" "$tmp_extract"
+            log_success "Instant update: Precompiled backend binary installed to /usr/local/bin/ownmediahost-backend"
+            binary_updated=true
+        fi
     fi
 fi
 
 if [[ "$binary_updated" != true ]]; then
-    if [[ "$BUILD_FROM_SOURCE" == true ]]; then
-        log_info "Building backend from source as requested..."
-    else
-        log_info "Precompiled backend not reachable or outdated. Compiling from source..."
-    fi
-    CARGO_ENV=""
-    for candidate in \
-        "/root/.cargo/env" \
-        "$HOME/.cargo/env" \
-        "/home/$(logname 2>/dev/null)/.cargo/env" \
-        /home/*/.cargo/env; do
-        if [ -f "$candidate" ]; then
-            CARGO_ENV="$candidate"
-            break
-        fi
-    done
+    log_info "Compiling backend from source (${REPO_DIR}/backend)..."
 
     cd "${REPO_DIR}/backend"
     local_target_dir="/tmp/ownmediahost-cargo-target"
@@ -279,6 +290,31 @@ if [ -f "$ENV_ACTIVE" ]; then
 
     if [ "$DEPLOY_MODE" != "split" ] && [ -n "$FRONTEND_DOMAIN" ] && [ -n "$BACKEND_DOMAIN" ]; then
         DEPLOY_MODE="split"
+    fi
+
+    # Synchronize ALLOWED_ORIGINS in $ENV_ACTIVE to ensure CORS permits requests from frontend and status domains
+    current_origins=$(as_root grep "^ALLOWED_ORIGINS=" "$ENV_ACTIVE" 2>/dev/null | cut -d= -f2- | tr -d '\r"' || echo "")
+    new_origins="${current_origins}"
+    for d in "$FRONTEND_DOMAIN" "$BACKEND_DOMAIN" "$STATUS_DOMAIN" "$caddy_domain"; do
+        if [ -n "$d" ]; then
+            clean_d=$(echo "$d" | sed -e 's|^[^/]*//||' -e 's|/.*$||' -e 's|:[0-9]*$||')
+            if [ -n "$clean_d" ]; then
+                for proto in "https://" "http://"; do
+                    origin_entry="${proto}${clean_d}"
+                    if [[ ",${new_origins}," != *",${origin_entry},"* ]]; then
+                        new_origins="${new_origins:+${new_origins},}${origin_entry}"
+                    fi
+                done
+            fi
+        fi
+    done
+    if [ -n "$new_origins" ] && [ "$new_origins" != "$current_origins" ]; then
+        if as_root grep -q "^ALLOWED_ORIGINS=" "$ENV_ACTIVE" 2>/dev/null; then
+            as_root sed -i "s|^ALLOWED_ORIGINS=.*|ALLOWED_ORIGINS=${new_origins}|" "$ENV_ACTIVE"
+        else
+            echo "ALLOWED_ORIGINS=${new_origins}" | as_root tee -a "$ENV_ACTIVE" >/dev/null
+        fi
+        log_info "Synchronized ALLOWED_ORIGINS in $ENV_ACTIVE for CORS."
     fi
 fi
 
