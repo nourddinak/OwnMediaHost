@@ -266,56 +266,74 @@ export const SettingsPage: React.FC = () => {
               </div>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)', display: 'block' }}>
-                  Frontend Dashboard Domain
-                </label>
-                <input
-                  type="text"
-                  value={settings['frontend_domain'] || ''}
-                  onChange={(e) => handleChange('frontend_domain', e.target.value)}
-                  placeholder="media.yourdomain.com"
-                  style={{
-                    width: '100%',
-                    background: 'var(--bg-tertiary)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    color: '#fff',
-                    fontSize: '13px',
-                    marginTop: '4px',
-                  }}
-                />
-                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px', display: 'block' }}>
-                  Serves the React dashboard SPA.
-                </span>
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)', display: 'block' }}>
+                    Frontend Dashboard Domain
+                  </label>
+                  <input
+                    type="text"
+                    value={settings['frontend_domain'] || ''}
+                    onChange={(e) => handleChange('frontend_domain', e.target.value)}
+                    placeholder="media.yourdomain.com"
+                    style={{
+                      width: '100%',
+                      background: 'var(--bg-tertiary)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      color: '#fff',
+                      fontSize: '13px',
+                      marginTop: '4px',
+                    }}
+                  />
+                  <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px', display: 'block' }}>
+                    Serves the React dashboard SPA.
+                  </span>
+                </div>
+                <div>
+                  <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)', display: 'block' }}>
+                    Backend API Domain
+                  </label>
+                  <input
+                    type="text"
+                    value={settings['backend_domain'] || ''}
+                    onChange={(e) => handleChange('backend_domain', e.target.value)}
+                    placeholder="api.yourdomain.com"
+                    style={{
+                      width: '100%',
+                      background: 'var(--bg-tertiary)',
+                      border: '1px solid var(--border-subtle)',
+                      borderRadius: '6px',
+                      padding: '8px 12px',
+                      color: '#fff',
+                      fontSize: '13px',
+                      marginTop: '4px',
+                    }}
+                  />
+                  <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px', display: 'block' }}>
+                    Axum API and media streaming.
+                  </span>
+                </div>
               </div>
-              <div>
-                <label style={{ fontSize: '12px', fontWeight: 500, color: 'var(--text-primary)', display: 'block' }}>
-                  Backend API Domain
-                </label>
-                <input
-                  type="text"
-                  value={settings['backend_domain'] || ''}
-                  onChange={(e) => handleChange('backend_domain', e.target.value)}
-                  placeholder="api.yourdomain.com"
-                  style={{
-                    width: '100%',
-                    background: 'var(--bg-tertiary)',
-                    border: '1px solid var(--border-subtle)',
-                    borderRadius: '6px',
-                    padding: '8px 12px',
-                    color: '#fff',
-                    fontSize: '13px',
-                    marginTop: '4px',
-                  }}
-                />
-                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px', display: 'block' }}>
-                  Axum API and media streaming.
-                </span>
+
+              {/* Split Mode Server Sync Notice */}
+              <div
+                style={{
+                  marginTop: '10px',
+                  padding: '10px 12px',
+                  borderRadius: '6px',
+                  background: 'rgba(255, 159, 10, 0.08)',
+                  border: '1px solid rgba(255, 159, 10, 0.25)',
+                  fontSize: '11px',
+                  color: '#ff9f0a',
+                  lineHeight: 1.5,
+                }}
+              >
+                <strong>VPS requirement for Split Mode:</strong> Add a DNS <code>A</code> record for <code>{settings['backend_domain'] || 'api.yourdomain.com'}</code> pointing to your VPS IP, then run <code>sudo bash /opt/ownmediahost/scripts/update.sh</code> on your server so Caddy provisions the second SSL certificate and configures cross-domain routing.
               </div>
-            </div>
+            </>
           )}
 
           {/* Public Media Base URL */}
