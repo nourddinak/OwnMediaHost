@@ -1103,19 +1103,13 @@ pub async fn format_media_responses_batch(
     let mut responses = Vec::with_capacity(media_list.len());
     for m in media_list {
         let (url, thumbnail_url) = if m.visibility == "private" {
-            // Generate a 24-hour signed preview URL for authenticated dashboard/API access
-            let expires = chrono::Utc::now().timestamp() + 86400;
-            let signature = sign_private_url(&config.private_url_signing_key, &m.public_id, expires);
-            let signed_url = format!(
-                "{}/private/{}?expires={}&signature={}",
-                config.public_base_url, m.public_id, expires, signature
-            );
+            let priv_url = format!("{}/private/{}", config.public_base_url, m.public_id);
             let thumb = if m.media_type == "video" {
                 format!("{}/thumbnails/{}.jpg", config.public_base_url, m.public_id)
             } else {
-                signed_url.clone()
+                priv_url.clone()
             };
-            (signed_url, Some(thumb))
+            (priv_url, Some(thumb))
         } else {
             let direct_url = format!("{}/f/{}/{}", config.public_base_url, m.public_id, m.filename);
             let thumb = if m.media_type == "video" {

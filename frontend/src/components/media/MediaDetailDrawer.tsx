@@ -230,7 +230,7 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
                     fontWeight: 500,
                   }}
                 >
-                  🔒 Private File
+                  🔒 Private (Unlisted)
                 </span>
               )}
             </div>
@@ -257,14 +257,7 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
               <button
                 onClick={() => handleCopy(permanentUrl, 'perm-bar', permanentInputRef)}
                 className="btn btn-primary press-scale"
-                style={{
-                  whiteSpace: 'nowrap',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  minWidth: '70px',
-                  justifyContent: 'center',
-                }}
+                style={{ fontSize: '12px', padding: '8px 14px' }}
               >
                 {copiedKey === 'perm-bar' ? '✓ Copied' : 'Copy'}
               </button>
@@ -279,6 +272,11 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
                 ↗
               </a>
             </div>
+            {media.visibility === 'private' && (
+              <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', lineHeight: '1.4' }}>
+                Unlisted link: anyone who has this link can view the file permanently without expiration.
+              </span>
+            )}
           </div>
 
           {/* Action Buttons Row */}
@@ -344,7 +342,12 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
                 gap: '10px',
               }}
             >
-              <div style={{ fontSize: '12px', fontWeight: 600 }}>Temporary Signed URL Generator</div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                <div style={{ fontSize: '12px', fontWeight: 600 }}>Temporary Signed URL (With Expiration)</div>
+                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                  Creates a temporary expiring link. Anyone with the link can view it until the timer ends.
+                </div>
+              </div>
               <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
                 <select
                   value={privateExpires}

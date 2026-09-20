@@ -307,4 +307,154 @@ mod tests {
             );
         }
     }
+
+    #[tokio::test]
+    async fn test_private_media_delivery() {
+        let pool = SqlitePoolOptions::new()
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+
+        // Create tables
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS api_logs (
+                id TEXT PRIMARY KEY,
+                request_id TEXT NOT NULL,
+                method TEXT NOT NULL,
+                path TEXT NOT NULL,
+                status_code INTEGER NOT NULL,
+                latency_ms REAL NOT NULL,
+                created_at TEXT NOT NULL
+            );",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        sqlx::query(
+            "CREATE TABLE IF NOT EXISTS media (
+                id TEXT PRIMARY KEY NOT NULL,
+                public_id TEXT UNIQUE NOT NULL,
+                filename TEXT NOT NULL,
+                original_filename TEXT NOT NULL,
+                extension TEXT NOT NULL,
+                mime_type TEXT NOT NULL,
+                media_type TEXT NOT NULL,
+                storage_provider TEXT NOT NULL DEFAULT 'local',
+                storage_path TEXT NOT NULL,
+                file_size INTEGER NOT NULL,
+                width INTEGER,
+                height INTEGER,
+                duration REAL,
+                video_codec TEXT,
+                audio_codec TEXT,
+                bitrate INTEGER,
+                frame_rate REAL,
+                sha256 TEXT NOT NULL,
+                visibility TEXT NOT NULL DEFAULT 'public',
+                folder_id TEXT,
+                created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+                deleted_at TEXT
+            );",
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let storage_dir = tempfile::tempdir().unwrap();
+        let file_path = storage_dir.path().join("secret.png");
+        tokio::fs::write(&file_path, b"fake-png-content").await.unwrap();
+
+        sqlx::query(
+            "INSERT INTO media (id, public_id, filename, original_filename, extension, mime_type, media_type, storage_path, file_size, sha256, visibility)
+             VALUES ('m1', 'priv_abc', 'secret.png', 'secret.png', 'png', 'image/png', 'image', 'secret.png', 16, 'dummy', 'private')"
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let storage = LocalStorageProvider::new(storage_dir.path().to_path_buf()).unwrap();
+        let signing_key = "test_key_32_bytes_long_123456789".to_string();
+        let config = Arc::new(AppConfig {
+            app_env: "test".to_string(),
+            host: "127.0.0.1".to_string(),
+            port: 5002,
+            database_url: "sqlite::memory:".to_string(),
+            media_root: storage_dir.path().to_path_buf(),
+            public_base_url: "http://localhost:5002".to_string(),
+            max_image_size: 10_000_000,
+            max_video_size: 10_000_000,
+            allowed_image_formats: vec!["jpeg".to_string(), "png".to_string()],
+            allowed_video_formats: vec!["mp4".to_string()],
+            cookie_secret: "test_secret_32_bytes_long_123456".to_string(),
+            api_key_pepper: "test_pepper_32_bytes_long_123456".to_string(),
+            private_url_signing_key: signing_key.clone(),
+            admin_email: "admin@test.com".to_string(),
+            admin_password: "testpassword123".to_string(),
+            allowed_origins: vec!["*".to_string()],
+            ffmpeg_path: "".to_string(),
+            ffprobe_path: "".to_string(),
+        });
+
+        let app = create_router(pool, storage, config);
+
+        // 1. Public endpoint (/f/...) must reject private media with 403 Forbidden
+        let req_public = Request::builder()
+            .uri("/f/priv_abc/secret.png")
+            .method("GET")
+            .body(Body::empty())
+            .unwrap();
+        let resp_public = app.clone().oneshot(req_public).await.unwrap();
+        assert_eq!(resp_public.status(), StatusCode::FORBIDDEN);
+
+        // 2. Direct private endpoint (/private/{id}) WITHOUT expiration must deliver 200 OK
+        let req_priv_direct = Request::builder()
+            .uri("/private/priv_abc")
+            .method("GET")
+            .body(Body::empty())
+            .unwrap();
+        let resp_priv_direct = app.clone().oneshot(req_priv_direct).await.unwrap();
+        assert_eq!(resp_priv_direct.status(), StatusCode::OK);
+
+        // 3. Private endpoint with filename (/private/{id}/{filename}) must deliver 200 OK
+        let req_priv_fn = Request::builder()
+            .uri("/private/priv_abc/secret.png")
+            .method("GET")
+            .body(Body::empty())
+            .unwrap();
+        let resp_priv_fn = app.clone().oneshot(req_priv_fn).await.unwrap();
+        assert_eq!(resp_priv_fn.status(), StatusCode::OK);
+
+        // 4. Valid unexpired Signed URL must deliver 200 OK
+        let future_expires = chrono::Utc::now().timestamp() + 3600;
+        let valid_sig = crate::security::sign_private_url(&signing_key, "priv_abc", future_expires);
+        let req_signed_valid = Request::builder()
+            .uri(format!("/private/priv_abc?expires={}&signature={}", future_expires, valid_sig))
+            .method("GET")
+            .body(Body::empty())
+            .unwrap();
+        let resp_signed_valid = app.clone().oneshot(req_signed_valid).await.unwrap();
+        assert_eq!(resp_signed_valid.status(), StatusCode::OK);
+
+        // 5. Expired Signed URL must be rejected with 403 Forbidden
+        let past_expires = chrono::Utc::now().timestamp() - 60;
+        let expired_sig = crate::security::sign_private_url(&signing_key, "priv_abc", past_expires);
+        let req_signed_expired = Request::builder()
+            .uri(format!("/private/priv_abc?expires={}&signature={}", past_expires, expired_sig))
+            .method("GET")
+            .body(Body::empty())
+            .unwrap();
+        let resp_signed_expired = app.clone().oneshot(req_signed_expired).await.unwrap();
+        assert_eq!(resp_signed_expired.status(), StatusCode::FORBIDDEN);
+
+        // 6. Invalid signature must be rejected with 403 Forbidden
+        let req_signed_invalid = Request::builder()
+            .uri(format!("/private/priv_abc?expires={}&signature=tampered_signature", future_expires))
+            .method("GET")
+            .body(Body::empty())
+            .unwrap();
+        let resp_signed_invalid = app.clone().oneshot(req_signed_invalid).await.unwrap();
+        assert_eq!(resp_signed_invalid.status(), StatusCode::FORBIDDEN);
+    }
 }

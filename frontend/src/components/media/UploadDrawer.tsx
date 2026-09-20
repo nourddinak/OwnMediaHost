@@ -258,7 +258,7 @@ export const UploadDrawer: React.FC<UploadDrawerProps> = ({
                 }}
               >
                 <option value="public">Public (Direct URL access)</option>
-                <option value="private">Private (Signed URLs only)</option>
+                <option value="private">Private (Unlisted unique link)</option>
               </select>
             </div>
 

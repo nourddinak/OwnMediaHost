@@ -45,6 +45,7 @@ pub fn router(pool: DbPool, storage: LocalStorageProvider, config: Arc<AppConfig
         .route("/f/{public_id}/{filename}", get(deliver_public_file))
         .route("/f/{public_id}", get(deliver_public_file_short))
         .route("/thumbnails/{public_id}", get(deliver_thumbnail))
+        .route("/private/{public_id}/{filename}", get(deliver_private_file_with_filename))
         .route("/private/{public_id}", get(deliver_private_file))
         .with_state(state)
 }
@@ -65,31 +66,55 @@ async fn deliver_public_file(
     deliver_media_by_public_id(&state, &headers, &public_id, false).await
 }
 
+async fn deliver_private_file_with_filename(
+    State(state): State<DeliveryState>,
+    headers: HeaderMap,
+    Path((public_id, _filename)): Path<(String, String)>,
+    Query(query): Query<PrivateQuery>,
+) -> Result<Response, AppError> {
+    deliver_private_file_impl(&state, &headers, &public_id, &query).await
+}
+
 async fn deliver_private_file(
     State(state): State<DeliveryState>,
     headers: HeaderMap,
     Path(public_id): Path<String>,
     Query(query): Query<PrivateQuery>,
 ) -> Result<Response, AppError> {
-    let Some(expires) = query.expires else {
-        return Err(AppError::Forbidden("Missing 'expires' parameter".into()));
-    };
-    let Some(signature) = query.signature else {
-        return Err(AppError::Forbidden("Missing 'signature' parameter".into()));
-    };
+    deliver_private_file_impl(&state, &headers, &public_id, &query).await
+}
 
-    let valid = verify_private_url(
-        &state.config.private_url_signing_key,
-        &signature,
-        &public_id,
-        expires,
-    );
+async fn deliver_private_file_impl(
+    state: &DeliveryState,
+    headers: &HeaderMap,
+    public_id: &str,
+    query: &PrivateQuery,
+) -> Result<Response, AppError> {
+    let clean_id = public_id.split('.').next().unwrap_or(public_id);
 
-    if !valid {
-        return Err(AppError::Forbidden("Invalid or expired signed URL".into()));
+    // If signed URL parameters are provided, validate expiration and HMAC signature
+    if let (Some(expires), Some(signature)) = (query.expires, &query.signature) {
+        let valid = verify_private_url(
+            &state.config.private_url_signing_key,
+            signature,
+            public_id,
+            expires,
+        ) || verify_private_url(
+            &state.config.private_url_signing_key,
+            signature,
+            clean_id,
+            expires,
+        );
+
+        if !valid {
+            return Err(AppError::Forbidden("Invalid or expired signed URL".into()));
+        }
+    } else if query.expires.is_some() || query.signature.is_some() {
+        return Err(AppError::Forbidden("Incomplete signed URL parameters".into()));
     }
 
-    deliver_media_by_public_id(&state, &headers, &public_id, true).await
+    // Direct access via unique ID link or validated signed URL: deliver with private access enabled
+    deliver_media_by_public_id(state, headers, public_id, true).await
 }
 
 async fn deliver_thumbnail(
@@ -115,7 +140,7 @@ async fn deliver_thumbnail(
     }
 
     // Fallback: If it's an image, deliver the original image file
-    deliver_media_by_public_id(&state, &headers, clean_id, false).await
+    deliver_media_by_public_id(&state, &headers, clean_id, true).await
 }
 
 async fn deliver_media_by_public_id(
@@ -124,15 +149,19 @@ async fn deliver_media_by_public_id(
     public_id: &str,
     is_private_access: bool,
 ) -> Result<Response, AppError> {
-    let media: Media = sqlx::query_as("SELECT * FROM media WHERE public_id = ? AND deleted_at IS NULL")
-        .bind(public_id)
-        .fetch_optional(&state.pool)
-        .await?
-        .ok_or_else(|| AppError::NotFound(format!("Media {} not found", public_id)))?;
+    let clean_id = public_id.split('.').next().unwrap_or(public_id);
+    let media: Media = sqlx::query_as(
+        "SELECT * FROM media WHERE (public_id = ? OR public_id = ?) AND deleted_at IS NULL",
+    )
+    .bind(public_id)
+    .bind(clean_id)
+    .fetch_optional(&state.pool)
+    .await?
+    .ok_or_else(|| AppError::NotFound(format!("Media {} not found", public_id)))?;
 
     if media.visibility == "private" && !is_private_access {
         return Err(AppError::Forbidden(
-            "Access denied: media is private. Please generate a signed temporary URL.".into(),
+            "Access denied: media is private. Please use the private link or generate a signed temporary URL.".into(),
         ));
     }
 
@@ -207,7 +236,7 @@ pub async fn serve_file_with_range(
     let cache_control = if is_immutable {
         "public, max-age=86400, must-revalidate"
     } else {
-        "public, max-age=3600, must-revalidate"
+        "private, no-cache, must-revalidate"
     };
 
     let resp = Response::builder()
