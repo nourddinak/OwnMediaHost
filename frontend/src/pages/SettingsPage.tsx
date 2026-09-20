@@ -71,6 +71,25 @@ export const SettingsPage: React.FC = () => {
     }
   };
 
+  // Auto-copy link on upload preference
+  const [autoCopyUpload, setAutoCopyUpload] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('ownmediahost_auto_copy_upload') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleAutoCopy = (val: boolean) => {
+    setAutoCopyUpload(val);
+    try {
+      localStorage.setItem('ownmediahost_auto_copy_upload', String(val));
+      toast(`Auto-copy link on upload ${val ? 'enabled' : 'disabled'}`);
+    } catch {
+      // ignore
+    }
+  };
+
   // 1-Click Server Update states
   const [updatePhase, setUpdatePhase] = useState<'idle' | 'running' | 'reconnecting' | 'completed' | 'error'>('idle');
   const [updateLogs, setUpdateLogs] = useState<string>('');
@@ -759,9 +778,14 @@ export const SettingsPage: React.FC = () => {
                 {settings['trash_retention_days'] || '30'} Days Retention
               </span>
               {!expandedSections.policies && (
-                <span className="settings-badge-subtle">
-                  Dedup: {settings['duplicate_handling'] || 'allow'}
-                </span>
+                <>
+                  <span className="settings-badge-subtle">
+                    Dedup: {settings['duplicate_handling'] || 'allow'}
+                  </span>
+                  <span className="settings-badge-subtle">
+                    Auto-Copy: {autoCopyUpload ? 'On' : 'Off'}
+                  </span>
+                </>
               )}
             </div>
             <p className="settings-card-desc">
@@ -819,6 +843,24 @@ export const SettingsPage: React.FC = () => {
                   className="settings-input"
                 />
               </div>
+            </div>
+
+            {/* Auto-Copy Link on Upload */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-sm)' }}>
+              <div>
+                <label className="settings-label" style={{ marginBottom: '2px' }}>
+                  Auto-Copy Link on Upload
+                </label>
+                <span className="settings-hint">
+                  Automatically copy the permanent media URL to your clipboard when uploading a single file or pasting via Ctrl+V.
+                </span>
+              </div>
+              <input
+                type="checkbox"
+                checked={autoCopyUpload}
+                onChange={(e) => handleToggleAutoCopy(e.target.checked)}
+                style={{ accentColor: 'var(--accent-blue)', cursor: 'pointer', width: '18px', height: '18px', marginLeft: '16px', flexShrink: 0 }}
+              />
             </div>
 
             {/* Allowed Image Formats */}

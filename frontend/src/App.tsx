@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './context/AuthContext';
+import { useToast } from './context/ToastContext';
 import { Sidebar, PageView } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
 import { UploadDrawer } from './components/media/UploadDrawer';
@@ -18,10 +19,15 @@ import { api, FolderItem } from './api/client';
 
 export const App: React.FC = () => {
   const { user, loading } = useAuth();
+  const { toast } = useToast();
 
   const [currentView, setCurrentView] = useState<PageView>('media');
   const [searchTerm, setSearchTerm] = useState('');
   const [uploadDrawerOpen, setUploadDrawerOpen] = useState(false);
+  const [initialUploadFiles, setInitialUploadFiles] = useState<File[]>([]);
+  const [isWindowDragging, setIsWindowDragging] = useState(false);
+  const dragCounterRef = useRef(0);
+
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
     try {
@@ -61,6 +67,115 @@ export const App: React.FC = () => {
     }
   }, [user, fetchFolders, refreshTrigger]);
 
+  const normalizePastedFile = (file: File): File => {
+    const ext = file.type.split('/')[1] || 'png';
+    const isGeneric =
+      !file.name || file.name === 'image.png' || file.name === 'blob' || file.name.startsWith('image.');
+    if (isGeneric) {
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      const newName = `pasted-${timestamp}.${ext}`;
+      return new File([file], newName, { type: file.type });
+    }
+    return file;
+  };
+
+  // Global Clipboard Paste Handler (Ctrl+V / Cmd+V)
+  useEffect(() => {
+    if (!user) return;
+
+    const handleWindowPaste = (e: ClipboardEvent) => {
+      // Avoid triggering when user is actively typing in inputs or contenteditable elements
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      const clipboardItems = e.clipboardData?.items;
+      if (!clipboardItems || clipboardItems.length === 0) return;
+
+      const pastedFiles: File[] = [];
+      for (let i = 0; i < clipboardItems.length; i++) {
+        const item = clipboardItems[i];
+        if (item.type.startsWith('image/') || item.type.startsWith('video/')) {
+          const file = item.getAsFile();
+          if (file) {
+            pastedFiles.push(normalizePastedFile(file));
+          }
+        }
+      }
+
+      if (pastedFiles.length > 0) {
+        e.preventDefault();
+        setInitialUploadFiles(pastedFiles);
+        setUploadDrawerOpen(true);
+        toast(`Pasted ${pastedFiles.length} file(s) ready to upload`);
+      }
+    };
+
+    window.addEventListener('paste', handleWindowPaste);
+    return () => window.removeEventListener('paste', handleWindowPaste);
+  }, [user, toast]);
+
+  // Full-Window Drag & Drop Upload Handlers
+  useEffect(() => {
+    if (!user) return;
+
+    const handleDragEnter = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounterRef.current++;
+      if (e.dataTransfer?.types?.includes('Files')) {
+        setIsWindowDragging(true);
+      }
+    };
+
+    const handleDragOver = (e: DragEvent) => {
+      e.preventDefault();
+      if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    };
+
+    const handleDragLeave = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounterRef.current--;
+      if (dragCounterRef.current <= 0) {
+        dragCounterRef.current = 0;
+        setIsWindowDragging(false);
+      }
+    };
+
+    const handleDrop = (e: DragEvent) => {
+      e.preventDefault();
+      dragCounterRef.current = 0;
+      setIsWindowDragging(false);
+
+      const files = e.dataTransfer?.files;
+      if (files && files.length > 0) {
+        const droppedFiles = Array.from(files);
+        setInitialUploadFiles(droppedFiles);
+        setUploadDrawerOpen(true);
+        toast(`Dropped ${droppedFiles.length} file(s) ready to upload`);
+      }
+    };
+
+    window.addEventListener('dragenter', handleDragEnter);
+    window.addEventListener('dragover', handleDragOver);
+    window.addEventListener('dragleave', handleDragLeave);
+    window.addEventListener('drop', handleDrop);
+
+    return () => {
+      window.removeEventListener('dragenter', handleDragEnter);
+      window.removeEventListener('dragover', handleDragOver);
+      window.removeEventListener('dragleave', handleDragLeave);
+      window.removeEventListener('drop', handleDrop);
+    };
+  }, [user, toast]);
+
   // Global Keyboard Shortcuts (U -> Upload, / -> Search, [ -> Toggle Sidebar, Esc -> Close)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -85,6 +200,7 @@ export const App: React.FC = () => {
         searchInput?.focus();
       } else if (e.key === 'Escape') {
         setUploadDrawerOpen(false);
+        setInitialUploadFiles([]);
       }
     };
 
@@ -216,10 +332,31 @@ export const App: React.FC = () => {
         </main>
       </div>
 
+      {/* Full-Window Drag & Drop Overlay */}
+      {isWindowDragging && (
+        <div className="window-drag-overlay">
+          <div className="window-drag-box">
+            <div className="window-drag-icon">
+              <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+            </div>
+            <span className="window-drag-title">Drop files anywhere to upload</span>
+            <span className="window-drag-subtitle">Release to queue images and videos for upload</span>
+          </div>
+        </div>
+      )}
+
       {/* Upload Drawer */}
       <UploadDrawer
         isOpen={uploadDrawerOpen}
-        onClose={() => setUploadDrawerOpen(false)}
+        initialFiles={initialUploadFiles}
+        onClose={() => {
+          setUploadDrawerOpen(false);
+          setInitialUploadFiles([]);
+        }}
         onUploaded={() => {
           triggerRefresh();
         }}

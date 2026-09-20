@@ -1,14 +1,16 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { api, FolderItem } from '../../api/client';
 import { useToast } from '../../context/ToastContext';
 import { generateClientMediaMeta } from '../../utils/thumbnail';
 import { formatMB } from '../../utils/formatters';
+import { copyTextToClipboard } from '../../utils/clipboard';
 
 interface UploadDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   onUploaded: () => void;
   folders: FolderItem[];
+  initialFiles?: File[];
 }
 
 interface UploadFileState {
@@ -24,6 +26,7 @@ export const UploadDrawer: React.FC<UploadDrawerProps> = ({
   onClose,
   onUploaded,
   folders,
+  initialFiles,
 }) => {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -35,6 +38,86 @@ export const UploadDrawer: React.FC<UploadDrawerProps> = ({
   const [alias, setAlias] = useState<string>('');
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [isUploading, setIsUploading] = useState<boolean>(false);
+  const [autoCopy, setAutoCopy] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('ownmediahost_auto_copy_upload') !== 'false';
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleAutoCopy = (val: boolean) => {
+    setAutoCopy(val);
+    try {
+      localStorage.setItem('ownmediahost_auto_copy_upload', String(val));
+    } catch {
+      // ignore
+    }
+  };
+
+  // Queue initial files if passed in (e.g. via global Ctrl+V or window drop)
+  useEffect(() => {
+    if (initialFiles && initialFiles.length > 0) {
+      const newItems: UploadFileState[] = initialFiles.map((file) => ({
+        id: Math.random().toString(36).substring(2, 9),
+        file,
+        progress: 0,
+        status: 'pending',
+      }));
+      setFiles((prev) => [...prev, ...newItems]);
+    }
+  }, [initialFiles]);
+
+  // Support pasting directly into the drawer when it is open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleDrawerPaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement;
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      ) {
+        return;
+      }
+
+      const clipboardItems = e.clipboardData?.items;
+      if (!clipboardItems) return;
+
+      const pastedFiles: File[] = [];
+      for (let i = 0; i < clipboardItems.length; i++) {
+        const item = clipboardItems[i];
+        if (item.type.startsWith('image/') || item.type.startsWith('video/')) {
+          const file = item.getAsFile();
+          if (file) {
+            const ext = file.type.split('/')[1] || 'png';
+            const cleanName =
+              !file.name || file.name === 'image.png' || file.name === 'blob' || file.name.startsWith('image.')
+                ? `pasted-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.${ext}`
+                : file.name;
+            pastedFiles.push(new File([file], cleanName, { type: file.type }));
+          }
+        }
+      }
+
+      if (pastedFiles.length > 0) {
+        e.preventDefault();
+        const newItems: UploadFileState[] = pastedFiles.map((file) => ({
+          id: Math.random().toString(36).substring(2, 9),
+          file,
+          progress: 0,
+          status: 'pending',
+        }));
+        setFiles((prev) => [...prev, ...newItems]);
+        toast(`Pasted ${pastedFiles.length} file(s) into queue`);
+      }
+    };
+
+    window.addEventListener('paste', handleDrawerPaste);
+    return () => window.removeEventListener('paste', handleDrawerPaste);
+  }, [isOpen, toast]);
 
   if (!isOpen) return null;
 
@@ -59,6 +142,9 @@ export const UploadDrawer: React.FC<UploadDrawerProps> = ({
     if (files.length === 0) return;
     setIsUploading(true);
 
+    let lastUploadedUrl: string | null = null;
+    let successfulUploadCount = 0;
+
     for (let i = 0; i < files.length; i++) {
       const item = files[i];
       if (item.status === 'completed') continue;
@@ -75,7 +161,7 @@ export const UploadDrawer: React.FC<UploadDrawerProps> = ({
           meta = await generateClientMediaMeta(item.file);
         }
 
-        await api.uploadFile(item.file, {
+        const uploadedMedia = await api.uploadFile(item.file, {
           folder_id: selectedFolder || undefined,
           visibility,
           duplicate_mode: duplicateMode,
@@ -90,6 +176,9 @@ export const UploadDrawer: React.FC<UploadDrawerProps> = ({
             );
           },
         });
+
+        successfulUploadCount++;
+        lastUploadedUrl = uploadedMedia.url;
 
         setFiles((prev) =>
           prev.map((f) => (f.id === item.id ? { ...f, status: 'completed', progress: 100 } : f))
@@ -106,7 +195,18 @@ export const UploadDrawer: React.FC<UploadDrawerProps> = ({
     }
 
     setIsUploading(false);
-    toast('Upload process completed!');
+
+    if (successfulUploadCount === 1 && lastUploadedUrl && autoCopy) {
+      const copied = await copyTextToClipboard(lastUploadedUrl);
+      if (copied) {
+        toast('Upload complete! Link copied to clipboard.');
+      } else {
+        toast('Upload process completed!');
+      }
+    } else {
+      toast('Upload process completed!');
+    }
+
     onUploaded();
   };
 
@@ -387,23 +487,48 @@ export const UploadDrawer: React.FC<UploadDrawerProps> = ({
         {/* Footer */}
         <div
           style={{
-            padding: '16px 20px',
+            padding: '14px 20px',
             borderTop: '1px solid var(--border-subtle)',
             display: 'flex',
-            justifyContent: 'flex-end',
-            gap: '10px',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: '12px',
           }}
         >
-          <button onClick={onClose} className="btn btn-secondary press-scale">
-            Cancel
-          </button>
-          <button
-            onClick={startUpload}
-            disabled={isUploading || files.length === 0}
-            className="btn btn-primary press-scale"
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '7px',
+              fontSize: '12px',
+              color: 'var(--text-secondary)',
+              cursor: 'pointer',
+              userSelect: 'none',
+            }}
+            title="Automatically copies the media link to your clipboard when uploading 1 file or pasting"
           >
-            {isUploading ? 'Uploading...' : `Upload ${files.length} Files`}
-          </button>
+            <input
+              type="checkbox"
+              checked={autoCopy}
+              onChange={(e) => handleToggleAutoCopy(e.target.checked)}
+              style={{ accentColor: 'var(--accent-blue)', cursor: 'pointer', width: '14px', height: '14px' }}
+            />
+            <span>Auto-copy link</span>
+          </label>
+
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+            <button onClick={onClose} className="btn btn-secondary press-scale">
+              Cancel
+            </button>
+            <button
+              onClick={startUpload}
+              disabled={isUploading || files.length === 0}
+              className="btn btn-primary press-scale"
+            >
+              {isUploading ? 'Uploading...' : `Upload ${files.length} Files`}
+            </button>
+          </div>
         </div>
       </div>
     </>
