@@ -45,13 +45,18 @@ The installer provisions Caddy reverse proxy, downloads pre-compiled release bin
 
 ---
 
-### Step 3: Connect 24/7 Status Page
+### Step 3: Connect 24/7 Status Page (Optional)
 
-Connect Better Stack out-of-band monitoring to track 100% automated downtime down to the second on `status.yourdomain.com`:
+If you want automated public uptime monitoring, incident post-mortems, and SLA tracking, OwnMediaHost integrates with Better Stack via a standalone companion repository: [**OwnMediaHost-status**](https://github.com/nourddinak/OwnMediaHost-status).
 
+Once your monitor is set up, connect it to your server in 1 click:
 ```bash
 sudo bash /opt/ownmediahost/scripts/connect-status.sh "https://status.yourdomain.com"
 ```
+
+> [!TIP]
+> **This step is 100% optional.** OwnMediaHost operates completely independently without an external status page. If connected, the status dot in your dashboard sidebar will link directly to your public status page.
+> For the complete step-by-step setup guide, DNS CNAME configuration, and template files, visit the standalone repository: [**nourddinak/OwnMediaHost-status**](https://github.com/nourddinak/OwnMediaHost-status) (or see [status/README.md](file:///c:/Users/bob/Desktop/SELFmedia/status/README.md)).
 
 > [!CAUTION]
 > **Always monitor `/health` (`https://media.yourdomain.com/health`) in Better Stack!**
@@ -120,6 +125,8 @@ sudo bash /opt/ownmediahost/scripts/connect-status.sh "https://status.yourdomain
 
 ### Out-of-Band Status Page Principle
 Hosting your status page on the same server as your media backend is an anti-pattern: if your VPS crashes or loses network connectivity, an on-server status page crashes with it.
+
+The status page infrastructure is maintained in its own dedicated standalone repository: [**OwnMediaHost-status**](https://github.com/nourddinak/OwnMediaHost-status).
 
 By pointing `status.yourdomain.com` directly to Better Stack via DNS CNAME:
 - **Survives Total Host Downtime**: Remains 100% online during kernel panics, reboots, or host network failures.
