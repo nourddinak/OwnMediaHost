@@ -11,12 +11,16 @@ export const SettingsPage: React.FC = () => {
   const [copiedFrontendProbe, setCopiedFrontendProbe] = useState(false);
   const [probing, setProbing] = useState(false);
   const [probeResult, setProbeResult] = useState<{ ok: boolean; status: string; latency?: number } | null>(null);
+  const [initialSettings, setInitialSettings] = useState<Record<string, string>>({});
+  const [showUpdateModal, setShowUpdateModal] = useState(false);
+  const [copiedUpdateCmd, setCopiedUpdateCmd] = useState(false);
 
   useEffect(() => {
     const fetchSettings = async () => {
       try {
         const data = await api.getSettings();
         setSettings(data);
+        setInitialSettings(data);
       } catch (err: any) {
         toast(err.message, 'error');
       } finally {
@@ -46,14 +50,35 @@ export const SettingsPage: React.FC = () => {
   };
 
   const handleSave = async () => {
+    const domainChanged =
+      (settings['deploy_mode'] || 'unified') !== (initialSettings['deploy_mode'] || 'unified') ||
+      (settings['domain'] || '') !== (initialSettings['domain'] || '') ||
+      (settings['frontend_domain'] || '') !== (initialSettings['frontend_domain'] || '') ||
+      (settings['backend_domain'] || '') !== (initialSettings['backend_domain'] || '');
+
     setSaving(true);
     try {
       await api.updateSettings(settings);
+      setInitialSettings(settings);
       toast('Platform settings updated successfully!');
+      if (domainChanged) {
+        setShowUpdateModal(true);
+      }
     } catch (err: any) {
       toast(err.message, 'error');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleCopyUpdateCommand = async () => {
+    try {
+      await navigator.clipboard.writeText('sudo bash /opt/ownmediahost/scripts/update.sh');
+      setCopiedUpdateCmd(true);
+      setTimeout(() => setCopiedUpdateCmd(false), 2000);
+      toast('Update command copied to clipboard!');
+    } catch {
+      toast('Failed to copy to clipboard', 'error');
     }
   };
 
@@ -683,6 +708,108 @@ export const SettingsPage: React.FC = () => {
           {saving ? 'Saving...' : 'Save Settings'}
         </button>
       </div>
+
+      {/* Interactive Post-Save Domain Routing Sync Modal */}
+      {showUpdateModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9999,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(8px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+          onClick={() => setShowUpdateModal(false)}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--bg-secondary, #18181b)',
+              border: '1px solid var(--border-subtle, #27272a)',
+              borderRadius: '12px',
+              padding: '24px',
+              maxWidth: '520px',
+              width: '100%',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
+              <span
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '8px',
+                  background: 'rgba(48, 209, 88, 0.15)',
+                  color: '#30d158',
+                  fontSize: '16px',
+                }}
+              >
+                ✓
+              </span>
+              <div>
+                <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Domain Routing Saved
+                </h3>
+                <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                  Synchronized to SQLite and /etc/ownmediahost/ownmediahost.env
+                </span>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '16px' }}>
+              Your domain configuration has been saved. To apply Caddy reverse-proxy routing, issue new SSL certificates, and update the frontend build on your server, copy and run this command on your VPS:
+            </p>
+
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                background: 'var(--bg-tertiary, #09090b)',
+                border: '1px solid var(--border-subtle, #27272a)',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                marginBottom: '20px',
+                gap: '8px',
+              }}
+            >
+              <code style={{ fontSize: '13px', color: '#38bdf8', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                sudo bash /opt/ownmediahost/scripts/update.sh
+              </code>
+              <button
+                type="button"
+                onClick={handleCopyUpdateCommand}
+                className="btn btn-secondary press-scale"
+                style={{
+                  fontSize: '11px',
+                  padding: '5px 12px',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {copiedUpdateCmd ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                type="button"
+                onClick={() => setShowUpdateModal(false)}
+                className="btn btn-primary press-scale"
+                style={{ padding: '8px 20px', fontSize: '13px', fontWeight: 600 }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

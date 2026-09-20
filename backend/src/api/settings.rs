@@ -124,6 +124,9 @@ async fn update_settings(
 
     state.settings_cache.update_batch(&req.settings).await;
 
+    // Synchronize settings to active .env file on the host
+    sync_settings_to_env_file(&req.settings);
+
     info!("Settings updated successfully.");
     Ok(Json(ApiResponse::ok("Settings updated successfully")))
 }
@@ -135,4 +138,132 @@ pub async fn get_setting_or_default(pool: &DbPool, key: &str, default: &str) -> 
         .await
         .unwrap_or(None)
         .unwrap_or_else(|| default.to_string())
+}
+
+fn extract_origin(val: &str) -> String {
+    let trimmed = val.trim();
+    if let Some((proto, rest)) = trimmed.split_once("://") {
+        let host = rest.split(['/', '?', '#']).next().unwrap_or("");
+        format!("{}://{}", proto, host)
+    } else if !trimmed.is_empty() {
+        let host = trimmed.split(['/', '?', '#']).next().unwrap_or("");
+        format!("https://{}", host)
+    } else {
+        String::new()
+    }
+}
+
+fn sync_settings_to_env_file(settings: &HashMap<String, String>) {
+    let candidates = [
+        "/etc/ownmediahost/ownmediahost.env",
+        ".env",
+        "backend/.env",
+        "../.env",
+    ];
+
+    let env_path = candidates.iter().find(|p| std::path::Path::new(p).exists());
+    let Some(path_str) = env_path else {
+        tracing::debug!("No writable environment file found for settings synchronization.");
+        return;
+    };
+    let path = std::path::Path::new(path_str);
+
+    let content = match std::fs::read_to_string(path) {
+        Ok(c) => c,
+        Err(e) => {
+            tracing::warn!("Failed to read env file for sync {}: {}", path.display(), e);
+            return;
+        }
+    };
+
+    let mut lines: Vec<String> = content.lines().map(|s| s.to_string()).collect();
+
+    let mut env_updates = HashMap::new();
+    if let Some(v) = settings.get("deploy_mode") {
+        env_updates.insert("DEPLOY_MODE", v.clone());
+    }
+    if let Some(v) = settings.get("domain") {
+        env_updates.insert("DOMAIN", v.clone());
+    }
+    if let Some(v) = settings.get("frontend_domain") {
+        env_updates.insert("FRONTEND_DOMAIN", v.clone());
+    }
+    if let Some(v) = settings.get("backend_domain") {
+        env_updates.insert("BACKEND_DOMAIN", v.clone());
+    }
+    if let Some(v) = settings.get("public_base_url") {
+        env_updates.insert("PUBLIC_BASE_URL", v.clone());
+    }
+    if let Some(v) = settings.get("status_page_url") {
+        env_updates.insert("STATUS_PAGE_URL", v.clone());
+    }
+
+    // Map origins to allow in CORS
+    let mut new_origins = Vec::new();
+    if let Some(fd) = settings.get("frontend_domain").filter(|s| !s.is_empty()) {
+        let origin = extract_origin(fd);
+        if !origin.is_empty() {
+            new_origins.push(origin);
+        }
+    }
+    if let Some(su) = settings.get("status_page_url").filter(|s| !s.is_empty()) {
+        let origin = extract_origin(su);
+        if !origin.is_empty() {
+            new_origins.push(origin);
+        }
+    }
+
+    for (env_key, new_val) in &env_updates {
+        let mut found = false;
+        for line in &mut lines {
+            let trimmed = line.trim();
+            if trimmed.starts_with(&format!("{}=", env_key)) || trimmed.starts_with(&format!("export {}=", env_key)) {
+                *line = format!("{}={}", env_key, new_val);
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            lines.push(format!("{}={}", env_key, new_val));
+        }
+    }
+
+    if !new_origins.is_empty() {
+        let mut found = false;
+        for line in &mut lines {
+            let trimmed = line.trim();
+            if trimmed.starts_with("ALLOWED_ORIGINS=") || trimmed.starts_with("export ALLOWED_ORIGINS=") {
+                let prefix = if trimmed.starts_with("export ") { "export ALLOWED_ORIGINS=" } else { "ALLOWED_ORIGINS=" };
+                let current_raw = trimmed.trim_start_matches("export ").trim_start_matches("ALLOWED_ORIGINS=").trim_matches('"');
+                if current_raw == "*" {
+                    found = true;
+                    break;
+                }
+                let mut current_origins: Vec<String> = current_raw
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+
+                for no in &new_origins {
+                    if !current_origins.contains(no) {
+                        current_origins.push(no.clone());
+                    }
+                }
+                *line = format!("{}\"{}\"", prefix, current_origins.join(","));
+                found = true;
+                break;
+            }
+        }
+        if !found {
+            lines.push(format!("ALLOWED_ORIGINS=\"{}\"", new_origins.join(",")));
+        }
+    }
+
+    let updated_content = lines.join("\n") + "\n";
+    if let Err(e) = std::fs::write(path, updated_content) {
+        tracing::warn!("Failed to write updated env to {}: {}", path.display(), e);
+    } else {
+        tracing::info!("Successfully synchronized settings to environment file: {}", path.display());
+    }
 }
