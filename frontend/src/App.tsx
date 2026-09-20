@@ -22,9 +22,28 @@ export const App: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [uploadDrawerOpen, setUploadDrawerOpen] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('ownmediahost_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [selectedFolderId, setSelectedFolderId] = useState<string>('');
+
+  const handleToggleSidebarCollapse = useCallback(() => {
+    setSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('ownmediahost_sidebar_collapsed', String(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
 
   const fetchFolders = useCallback(async () => {
     try {
@@ -41,7 +60,7 @@ export const App: React.FC = () => {
     }
   }, [user, fetchFolders, refreshTrigger]);
 
-  // Global Keyboard Shortcuts (U -> Upload, / -> Search, Esc -> Close)
+  // Global Keyboard Shortcuts (U -> Upload, / -> Search, [ -> Toggle Sidebar, Esc -> Close)
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Avoid triggering when user is typing in input
@@ -53,7 +72,10 @@ export const App: React.FC = () => {
         return;
       }
 
-      if (e.key === 'u' || e.key === 'U') {
+      if (e.key === '[' && !e.metaKey && !e.ctrlKey && !e.altKey) {
+        e.preventDefault();
+        handleToggleSidebarCollapse();
+      } else if (e.key === 'u' || e.key === 'U') {
         e.preventDefault();
         setUploadDrawerOpen(true);
       } else if (e.key === '/') {
@@ -67,7 +89,7 @@ export const App: React.FC = () => {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [handleToggleSidebarCollapse]);
 
   if (loading) {
     return (
@@ -127,6 +149,8 @@ export const App: React.FC = () => {
         onSelectView={handleSelectView}
         isOpen={mobileSidebarOpen}
         onCloseMobile={() => setMobileSidebarOpen(false)}
+        isCollapsed={sidebarCollapsed}
+        onToggleCollapse={handleToggleSidebarCollapse}
       />
 
       {/* Main Workspace */}
@@ -137,6 +161,8 @@ export const App: React.FC = () => {
           onSearchChange={setSearchTerm}
           onOpenUpload={() => setUploadDrawerOpen(true)}
           onToggleMobileSidebar={() => setMobileSidebarOpen(!mobileSidebarOpen)}
+          isSidebarCollapsed={sidebarCollapsed}
+          onToggleSidebarCollapse={handleToggleSidebarCollapse}
         />
 
         <main className="content-scrollable">

@@ -20,6 +20,8 @@ interface SidebarProps {
   onSelectView: (view: PageView) => void;
   isOpen: boolean;
   onCloseMobile: () => void;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -27,6 +29,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onSelectView,
   isOpen,
   onCloseMobile,
+  isCollapsed,
+  onToggleCollapse,
 }) => {
   const { user, logout } = useAuth();
   const [statusUrl, setStatusUrl] = useState<string>('/status/');
@@ -201,56 +205,94 @@ export const Sidebar: React.FC<SidebarProps> = ({
         />
       )}
 
-      <aside className={`sidebar ${isOpen ? 'open' : ''}`}>
+      <aside className={`sidebar ${isOpen ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''}`}>
         {/* Brand Header */}
         <div
           style={{
             height: '54px',
-            padding: '0 20px',
+            padding: isCollapsed ? '0 12px' : '0 16px',
             display: 'flex',
             alignItems: 'center',
-            gap: '10px',
+            justifyContent: isCollapsed ? 'center' : 'space-between',
+            gap: '8px',
             borderBottom: '1px solid var(--border-subtle)',
+            position: 'relative',
           }}
         >
           <div
+            onClick={isCollapsed ? onToggleCollapse : undefined}
+            title={isCollapsed ? "Expand sidebar ([)" : undefined}
             style={{
-              width: '26px',
-              height: '26px',
-              borderRadius: '6px',
-              background: '#ffffff',
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'center',
-              color: '#000000',
+              gap: '10px',
+              cursor: isCollapsed ? 'pointer' : 'default',
+              overflow: 'hidden',
             }}
           >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <polygon points="12 2 2 7 12 12 22 7 12 2"/>
-              <polyline points="2 17 12 22 22 17"/>
-              <polyline points="2 12 12 17 22 12"/>
-            </svg>
+            <div
+              style={{
+                width: '28px',
+                height: '28px',
+                minWidth: '28px',
+                borderRadius: '6px',
+                background: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#000000',
+                transition: 'transform 0.15s ease',
+              }}
+              className={isCollapsed ? "press-scale" : undefined}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="12 2 2 7 12 12 22 7 12 2"/>
+                <polyline points="2 17 12 22 22 17"/>
+                <polyline points="2 12 12 17 22 12"/>
+              </svg>
+            </div>
+            {!isCollapsed && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
+                <span style={{ fontSize: '15px', fontWeight: 600, letterSpacing: '-0.02em' }}>
+                  OwnMediaHost
+                </span>
+                <span
+                  style={{
+                    fontSize: '10px',
+                    fontWeight: 500,
+                    padding: '2px 5px',
+                    borderRadius: '4px',
+                    background: 'rgba(255,255,255,0.08)',
+                    color: 'var(--text-tertiary)',
+                  }}
+                >
+                  v1.0
+                </span>
+              </div>
+            )}
           </div>
-          <span style={{ fontSize: '15px', fontWeight: 600, letterSpacing: '-0.02em' }}>
-            OwnMediaHost
-          </span>
-          <span
-            style={{
-              fontSize: '10px',
-              fontWeight: 500,
-              padding: '2px 5px',
-              borderRadius: '4px',
-              background: 'rgba(255,255,255,0.08)',
-              color: 'var(--text-tertiary)',
-              marginLeft: 'auto',
-            }}
-          >
-            v1.0
-          </span>
+
+          {!isCollapsed && (
+            <button
+              onClick={onToggleCollapse}
+              title="Collapse sidebar ([)"
+              className="sidebar-toggle-btn press-scale"
+              style={{
+                padding: '5px',
+                borderRadius: '6px',
+              }}
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="18" height="18" x="3" y="3" rx="2" ry="2"/>
+                <line x1="9" x2="9" y1="3" y2="21"/>
+                <path d="m16 9-3 3 3 3"/>
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* Navigation List */}
-        <div style={{ flex: 1, padding: '12px 10px', overflowY: 'auto' }}>
+        <div style={{ flex: 1, padding: isCollapsed ? '12px 6px' : '12px 10px', overflowY: 'auto', overflowX: 'hidden' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
             {navItems.map((item) => {
               const active = currentView === item.id;
@@ -261,13 +303,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     onSelectView(item.id);
                     onCloseMobile();
                   }}
+                  title={item.label}
                   className="press-scale"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '10px',
+                    justifyContent: isCollapsed ? 'center' : 'flex-start',
+                    gap: isCollapsed ? 0 : '10px',
                     width: '100%',
-                    padding: '8px 12px',
+                    padding: isCollapsed ? '9px 0' : '8px 12px',
                     borderRadius: 'var(--radius-sm)',
                     fontSize: '13px',
                     fontWeight: active ? 600 : 400,
@@ -275,17 +319,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     background: active ? 'rgba(255, 255, 255, 0.08)' : 'transparent',
                     textAlign: 'left',
                     transition: 'all 120ms ease',
+                    whiteSpace: 'nowrap',
                   }}
                 >
-                  <span style={{ opacity: active ? 1 : 0.7 }}>{item.icon}</span>
-                  {item.label}
+                  <span style={{ opacity: active ? 1 : 0.7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.icon}</span>
+                  {!isCollapsed && <span>{item.label}</span>}
                 </button>
               );
             })}
           </div>
 
           {/* Out-of-Band System Status Link */}
-          <div style={{ padding: '4px 12px 10px' }}>
+          <div style={{ padding: isCollapsed ? '12px 0 6px' : '6px 12px 10px', display: 'flex', justifyContent: 'center' }}>
             <a
               href={statusUrl}
               target="_blank"
@@ -294,10 +339,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
-                width: '100%',
-                padding: '6px 10px',
-                borderRadius: 'var(--radius-sm)',
+                justifyContent: isCollapsed ? 'center' : 'flex-start',
+                gap: isCollapsed ? 0 : '8px',
+                width: isCollapsed ? '38px' : '100%',
+                height: isCollapsed ? '38px' : 'auto',
+                padding: isCollapsed ? 0 : '6px 10px',
+                borderRadius: isCollapsed ? '8px' : 'var(--radius-sm)',
                 fontSize: '12px',
                 color: 'var(--text-tertiary)',
                 textDecoration: 'none',
@@ -306,14 +353,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }}
               title={
                 healthStatus === 'operational'
-                  ? 'All systems operational — click to view 24/7 public status'
-                  : 'Service degradation detected — click to view 24/7 public status'
+                  ? 'Status: Operational — click to view 24/7 public status'
+                  : 'Status: Degraded / Offline — click to view 24/7 public status'
               }
             >
               <span
                 style={{
                   width: '6px',
                   height: '6px',
+                  minWidth: '6px',
                   borderRadius: '50%',
                   background:
                     healthStatus === 'operational'
@@ -329,14 +377,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       : '0 0 6px rgba(248, 81, 73, 0.4)',
                 }}
               />
-              <span style={{ color: healthStatus === 'operational' ? 'var(--text-secondary)' : '#f85149' }}>
-                {healthStatus === 'operational' ? 'Status: Operational' : healthStatus === 'degraded' ? 'Status: Degraded' : 'Status: Offline'}
-              </span>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto', opacity: 0.6 }}>
-                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                <polyline points="15 3 21 3 21 9"/>
-                <line x1="10" y1="14" x2="21" y2="3"/>
-              </svg>
+              {!isCollapsed && (
+                <>
+                  <span style={{ color: healthStatus === 'operational' ? 'var(--text-secondary)' : '#f85149', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {healthStatus === 'operational' ? 'Status: Operational' : healthStatus === 'degraded' ? 'Status: Degraded' : 'Status: Offline'}
+                  </span>
+                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto', opacity: 0.6 }}>
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" y1="14" x2="21" y2="3"/>
+                  </svg>
+                </>
+              )}
             </a>
           </div>
         </div>
@@ -344,49 +396,94 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* User Footer */}
         <div
           style={{
-            padding: '14px 16px',
+            padding: isCollapsed ? '12px 6px' : '14px 16px',
             borderTop: '1px solid var(--border-subtle)',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent: isCollapsed ? 'center' : 'space-between',
+            flexDirection: isCollapsed ? 'column' : 'row',
+            gap: isCollapsed ? '8px' : '0',
           }}
         >
-          <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <span
-              style={{
-                fontSize: '12px',
-                fontWeight: 500,
-                color: 'var(--text-primary)',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                maxWidth: '140px',
-              }}
-            >
-              {user?.email || 'Administrator'}
-            </span>
-            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Self-Hosted</span>
-          </div>
+          {isCollapsed ? (
+            <>
+              <div
+                title={user?.email || 'Administrator (Self-Hosted)'}
+                style={{
+                  width: '30px',
+                  height: '30px',
+                  borderRadius: '50%',
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                }}
+              >
+                {(user?.email?.[0] || 'A').toUpperCase()}
+              </div>
+              <button
+                onClick={logout}
+                title="Sign out"
+                style={{
+                  padding: '6px',
+                  borderRadius: '6px',
+                  color: 'var(--text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                className="btn-ghost"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                  <polyline points="16 17 21 12 16 7"/>
+                  <line x1="21" x2="9" y1="12" y2="12"/>
+                </svg>
+              </button>
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <span
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 500,
+                    color: 'var(--text-primary)',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    maxWidth: '140px',
+                  }}
+                >
+                  {user?.email || 'Administrator'}
+                </span>
+                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Self-Hosted</span>
+              </div>
 
-          <button
-            onClick={logout}
-            title="Sign out"
-            style={{
-              padding: '6px',
-              borderRadius: '6px',
-              color: 'var(--text-secondary)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            className="btn-ghost"
-          >
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
-              <polyline points="16 17 21 12 16 7"/>
-              <line x1="21" x2="9" y1="12" y2="12"/>
-            </svg>
-          </button>
+              <button
+                onClick={logout}
+                title="Sign out"
+                style={{
+                  padding: '6px',
+                  borderRadius: '6px',
+                  color: 'var(--text-secondary)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}
+                className="btn-ghost"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                  <polyline points="16 17 21 12 16 7"/>
+                  <line x1="21" x2="9" y1="12" y2="12"/>
+                </svg>
+              </button>
+            </>
+          )}
         </div>
       </aside>
     </>

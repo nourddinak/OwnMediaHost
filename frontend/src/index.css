@@ -315,7 +315,28 @@ input, select, textarea {
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-  transition: transform var(--transition-normal);
+  transition: width var(--transition-normal), transform var(--transition-normal);
+  overflow: hidden;
+  user-select: none;
+}
+
+.sidebar.collapsed {
+  width: 64px;
+}
+
+.sidebar-toggle-btn {
+  padding: 5px;
+  border-radius: 6px;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--transition-fast), background var(--transition-fast);
+}
+
+.sidebar-toggle-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .main-content {
@@ -346,6 +367,7 @@ input, select, textarea {
 
 @media (max-width: 768px) {
   .sidebar {
+    width: 240px !important;
     position: fixed;
     top: 0;
     bottom: 0;

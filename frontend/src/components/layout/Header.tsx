@@ -5,6 +5,8 @@ interface HeaderProps {
   onSearchChange: (term: string) => void;
   onOpenUpload: () => void;
   onToggleMobileSidebar: () => void;
+  isSidebarCollapsed: boolean;
+  onToggleSidebarCollapse: () => void;
   title: string;
 }
 
@@ -13,11 +15,13 @@ export const Header: React.FC<HeaderProps> = ({
   onSearchChange,
   onOpenUpload,
   onToggleMobileSidebar,
+  isSidebarCollapsed,
+  onToggleSidebarCollapse,
   title,
 }) => {
   return (
     <header className="header-bar">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '14px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
         <button
           onClick={onToggleMobileSidebar}
           style={{
@@ -32,6 +36,27 @@ export const Header: React.FC<HeaderProps> = ({
             <line x1="4" x2="20" y1="12" y2="12"/>
             <line x1="4" x2="20" y1="6" y2="6"/>
             <line x1="4" x2="20" y1="18" y2="18"/>
+          </svg>
+        </button>
+
+        {/* Desktop Sidebar Toggle Button */}
+        <button
+          onClick={onToggleSidebarCollapse}
+          className="sidebar-toggle-btn press-scale"
+          title={isSidebarCollapsed ? 'Expand sidebar ([)' : 'Collapse sidebar ([)'}
+          style={{
+            padding: '5px',
+            borderRadius: '6px',
+            color: 'var(--text-secondary)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+            <line x1="9" x2="9" y1="3" y2="21" />
+            {isSidebarCollapsed ? <path d="m14 9 3 3-3 3" /> : <path d="m16 9-3 3 3 3" />}
           </svg>
         </button>
 
