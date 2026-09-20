@@ -11,6 +11,12 @@ export const UpdatesPage: React.FC = () => {
   const [updateLogs, setUpdateLogs] = useState<string>('');
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [copiedCmd, setCopiedCmd] = useState(false);
+  const [copiedSha, setCopiedSha] = useState(false);
+
+  // Overlays
+  const [showTerminalOverlay, setShowTerminalOverlay] = useState(false);
+  const [showCommitOverlay, setShowCommitOverlay] = useState(false);
+  const [showSshOverlay, setShowSshOverlay] = useState(false);
 
   const pollTimerRef = useRef<any>(null);
   const reconnectTimerRef = useRef<any>(null);
@@ -23,7 +29,9 @@ export const UpdatesPage: React.FC = () => {
       setUpdateInfo(data);
       if (force) {
         if (data.has_update) {
-          toast('New update found on GitHub!', 'success');
+          toast('New update ready for installation!', 'success');
+        } else if (data.is_building) {
+          toast('GitHub Actions is currently building the new release.', 'info');
         } else {
           toast('Your server is up to date!', 'info');
         }
@@ -68,7 +76,7 @@ export const UpdatesPage: React.FC = () => {
           toast('Server update completed! Reloading dashboard...', 'success');
           setTimeout(() => {
             window.location.reload();
-          }, 1500);
+          }, 2000);
         }
       } catch {
         if (attempts >= maxAttempts) {
@@ -82,6 +90,7 @@ export const UpdatesPage: React.FC = () => {
 
   const handleTriggerUpdate = async () => {
     setUpdatePhase('running');
+    setShowTerminalOverlay(true);
     setUpdateLogs('⚡ Signaling systemd to execute fast server update...\n');
     setUpdateError(null);
 
@@ -125,15 +134,29 @@ export const UpdatesPage: React.FC = () => {
     toast('Terminal update command copied to clipboard!');
   };
 
+  const copySha = (sha: string) => {
+    navigator.clipboard.writeText(sha);
+    setCopiedSha(true);
+    setTimeout(() => setCopiedSha(false), 2000);
+    toast('Commit SHA copied!');
+  };
+
+  const copyTerminalLogs = () => {
+    if (updateLogs) {
+      navigator.clipboard.writeText(updateLogs);
+      toast('Update logs copied to clipboard!');
+    }
+  };
+
   return (
-    <div style={{ maxWidth: '960px', margin: '0 auto', padding: '24px 20px' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px' }}>
-        <div>
-          <h1 style={{ fontSize: '22px', fontWeight: 600, letterSpacing: '-0.02em', margin: 0 }}>
+    <div className="updates-container">
+      {/* Header Row */}
+      <div className="updates-header">
+        <div className="updates-title-group">
+          <h1 className="updates-main-title">
             Updates & System Notifications
           </h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: '13px', margin: '4px 0 0' }}>
+          <p className="updates-subtitle">
             Track remote releases from GitHub and manage automated 1-click server updates.
           </p>
         </div>
@@ -141,21 +164,8 @@ export const UpdatesPage: React.FC = () => {
         <button
           onClick={() => fetchUpdateCheck(true)}
           disabled={checking}
-          className="press-scale"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: '8px',
-            padding: '8px 14px',
-            color: 'var(--text-primary)',
-            fontSize: '13px',
-            fontWeight: 500,
-            cursor: checking ? 'not-allowed' : 'pointer',
-            transition: 'all 0.15s ease',
-          }}
+          className="press-scale updates-check-btn"
+          aria-label="Check for updates"
         >
           <svg
             width="14"
@@ -168,6 +178,7 @@ export const UpdatesPage: React.FC = () => {
             strokeLinejoin="round"
             style={{
               animation: checking ? 'spin 1s linear infinite' : 'none',
+              flexShrink: 0,
             }}
           >
             <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
@@ -175,85 +186,60 @@ export const UpdatesPage: React.FC = () => {
             <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
             <path d="M16 21h5v-5" />
           </svg>
-          {checking ? 'Checking GitHub...' : 'Check for Updates'}
+          <span style={{ whiteSpace: 'nowrap' }}>{checking ? 'Checking GitHub...' : 'Check for Updates'}</span>
         </button>
       </div>
 
       {loading ? (
-        <div style={{ padding: '60px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
+        <div style={{ padding: '60px 20px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
           <div className="spinner" style={{ margin: '0 auto 12px' }} />
           Checking GitHub release status...
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
           {/* Main Status Hero Card */}
           <div
-            style={{
-              background: updateInfo?.has_update
-                ? 'linear-gradient(135deg, rgba(255, 159, 10, 0.12), rgba(255, 100, 0, 0.04))'
+            className={`hero-card ${
+              updateInfo?.has_update
+                ? 'hero-update'
                 : updateInfo?.is_building
-                ? 'linear-gradient(135deg, rgba(10, 132, 255, 0.12), rgba(255, 159, 10, 0.06))'
-                : 'linear-gradient(135deg, rgba(48, 209, 88, 0.1), rgba(0, 122, 255, 0.03))',
-              border: `1px solid ${
-                updateInfo?.has_update
-                  ? 'rgba(255, 159, 10, 0.3)'
-                  : updateInfo?.is_building
-                  ? 'rgba(10, 132, 255, 0.3)'
-                  : 'rgba(48, 209, 88, 0.25)'
-              }`,
-              borderRadius: '12px',
-              padding: '24px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '16px',
-            }}
+                ? 'hero-building'
+                : 'hero-uptodate'
+            }`}
           >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+            <div className="hero-content-wrapper">
               <div
-                style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '12px',
-                  background: updateInfo?.has_update
-                    ? 'rgba(255, 159, 10, 0.2)'
+                className={`hero-icon-box ${
+                  updateInfo?.has_update
+                    ? 'icon-update'
                     : updateInfo?.is_building
-                    ? 'rgba(10, 132, 255, 0.2)'
-                    : 'rgba(48, 209, 88, 0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: updateInfo?.has_update
-                    ? '#ff9f0a'
-                    : updateInfo?.is_building
-                    ? '#0a84ff'
-                    : '#30d158',
-                }}
+                    ? 'icon-building'
+                    : 'icon-uptodate'
+                }`}
               >
                 {updateInfo?.has_update ? (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <circle cx="12" cy="12" r="10" />
                     <line x1="12" y1="8" x2="12" y2="12" />
                     <line x1="12" y1="16" x2="12.01" y2="16" />
                   </svg>
                 ) : updateInfo?.is_building ? (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 3s linear infinite' }}>
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 3s linear infinite' }}>
                     <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                     <path d="M3 3v5h5" />
                     <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
                     <path d="M16 21h5v-5" />
                   </svg>
                 ) : (
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M20 6 9 17l-5-5" />
                   </svg>
                 )}
               </div>
 
-              <div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <h2 style={{ fontSize: '17px', fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <h2 style={{ fontSize: '16px', fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>
                     {updateInfo?.has_update
                       ? 'New Update Available!'
                       : updateInfo?.is_building
@@ -261,22 +247,13 @@ export const UpdatesPage: React.FC = () => {
                       : 'Your Server is Up to Date'}
                   </h2>
                   <span
-                    style={{
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      padding: '2px 8px',
-                      borderRadius: '10px',
-                      background: updateInfo?.has_update
-                        ? 'rgba(255, 159, 10, 0.2)'
+                    className={`badge-pill ${
+                      updateInfo?.has_update
+                        ? 'badge-update'
                         : updateInfo?.is_building
-                        ? 'rgba(10, 132, 255, 0.2)'
-                        : 'rgba(48, 209, 88, 0.2)',
-                      color: updateInfo?.has_update
-                        ? '#ff9f0a'
-                        : updateInfo?.is_building
-                        ? '#0a84ff'
-                        : '#30d158',
-                    }}
+                        ? 'badge-building'
+                        : 'badge-uptodate'
+                    }`}
                   >
                     {updateInfo?.has_update
                       ? 'READY TO INSTALL'
@@ -285,7 +262,7 @@ export const UpdatesPage: React.FC = () => {
                       : 'LATEST'}
                   </span>
                 </div>
-                <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
                   {updateInfo?.has_update
                     ? `Release ${updateInfo.release_short_commit || updateInfo.latest_short_commit} has finished compiling and is ready for 1-click install.`
                     : updateInfo?.is_building
@@ -299,124 +276,82 @@ export const UpdatesPage: React.FC = () => {
               <button
                 onClick={handleTriggerUpdate}
                 disabled={updatePhase === 'running' || updatePhase === 'reconnecting'}
-                className="press-scale"
-                style={{
-                  background: '#ff9f0a',
-                  color: '#000',
-                  border: 'none',
-                  borderRadius: '8px',
-                  padding: '10px 20px',
-                  fontWeight: 600,
-                  fontSize: '13px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  boxShadow: '0 4px 12px rgba(255, 159, 10, 0.25)',
-                }}
+                className="press-scale btn-update-action"
               >
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="7 10 12 15 17 10" />
                   <line x1="12" y1="15" x2="12" y2="3" />
                 </svg>
-                {updatePhase === 'running' || updatePhase === 'reconnecting' ? 'Updating...' : 'Update Server Now (~5s)'}
+                {updatePhase === 'running' || updatePhase === 'reconnecting' ? 'Updating Server...' : 'Update Server Now (~5s)'}
               </button>
             ) : updateInfo?.is_building ? (
-              <button
-                disabled
-                style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  color: 'var(--text-tertiary)',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: '8px',
-                  padding: '10px 18px',
-                  fontWeight: 500,
-                  fontSize: '13px',
-                  cursor: 'not-allowed',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                }}
-              >
-                <div className="spinner" style={{ width: '14px', height: '14px' }} />
+              <button disabled className="btn-building-action">
+                <div className="spinner" style={{ width: '13px', height: '13px' }} />
                 Building Release... (~2m)
               </button>
             ) : null}
           </div>
 
           {/* Details Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '16px' }}>
+          <div className="details-grid">
             {/* Installed Version Box */}
-            <div
-              style={{
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: '10px',
-                padding: '18px',
-              }}
-            >
-              <h3 style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-tertiary)', margin: '0 0 12px' }}>
+            <div className="details-card">
+              <h3 className="details-card-title">
                 Current Installation
               </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Installed Commit</span>
-                  <span style={{ fontFamily: 'monospace', fontWeight: 600, color: 'var(--text-primary)' }}>
+              <div className="status-rows-container">
+                <div className="status-row">
+                  <span className="status-label">Installed Commit</span>
+                  <span className="status-value status-mono">
                     {updateInfo?.current_short_commit}
                   </span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Binary Engine</span>
-                  <span style={{ color: 'var(--text-primary)' }}>Rust SIMD (Linux x86_64)</span>
+                <div className="status-row">
+                  <span className="status-label">Binary Engine</span>
+                  <span className="status-value">Rust SIMD (x86_64)</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Service Management</span>
-                  <span style={{ color: 'var(--text-primary)' }}>systemd (ownmediahost.service)</span>
+                <div className="status-row">
+                  <span className="status-label">Service Engine</span>
+                  <span className="status-value">systemd (ownmediahost)</span>
                 </div>
               </div>
             </div>
 
             {/* Remote Release Box */}
-            <div
-              style={{
-                background: 'var(--bg-secondary)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: '10px',
-                padding: '18px',
-              }}
-            >
-              <h3 style={{ fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', color: 'var(--text-tertiary)', margin: '0 0 12px' }}>
+            <div className="details-card">
+              <h3 className="details-card-title">
                 GitHub Repository Status
               </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Branch 'main'</span>
+              <div className="status-rows-container">
+                <div className="status-row">
+                  <span className="status-label">Branch 'main'</span>
                   <a
                     href={`https://github.com/nourddinak/OwnMediaHost/commit/${updateInfo?.latest_commit}`}
                     target="_blank"
                     rel="noreferrer"
-                    style={{ fontFamily: 'monospace', color: '#0a84ff', textDecoration: 'none' }}
+                    className="status-link status-mono"
                   >
                     {updateInfo?.latest_short_commit} ↗
                   </a>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Published Release</span>
-                  <span style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>
+                <div className="status-row">
+                  <span className="status-label">Published Release</span>
+                  <span className="status-value status-mono">
                     {updateInfo?.release_short_commit || 'latest'}
                   </span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Release Build Status</span>
+                <div className="status-row">
+                  <span className="status-label">Release Build Status</span>
                   <span
                     style={{
                       color: updateInfo?.release_ready
-                        ? '#30d158'
+                        ? 'var(--accent-green)'
                         : updateInfo?.is_building
-                        ? '#0a84ff'
-                        : '#ff9f0a',
-                      fontWeight: 500,
+                        ? 'var(--accent-blue)'
+                        : 'var(--accent-orange)',
+                      fontWeight: 600,
+                      fontSize: '12px',
                     }}
                   >
                     {updateInfo?.release_ready
@@ -430,193 +365,1094 @@ export const UpdatesPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Latest Changelog / Commit Card */}
+          {/* Latest Changelog / Commit Card (Clickable to open overlay) */}
           <div
-            style={{
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '10px',
-              padding: '20px',
-            }}
+            className="details-card changelog-trigger press-scale"
+            onClick={() => setShowCommitOverlay(true)}
+            role="button"
+            tabIndex={0}
           >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <h3 className="details-card-title" style={{ margin: 0 }}>
                 Latest Changes in Repository
               </h3>
-              {updateInfo?.published_at && (
-                <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
-                  Published {new Date(updateInfo.published_at).toLocaleString()}
-                </span>
-              )}
+              <span className="view-details-link">
+                View Details ›
+              </span>
             </div>
 
-            <div
-              style={{
-                background: 'var(--bg-tertiary)',
-                borderRadius: '8px',
-                padding: '12px 14px',
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '12px',
-              }}
-            >
-              <div
-                style={{
-                  width: '28px',
-                  height: '28px',
-                  borderRadius: '50%',
-                  background: 'rgba(255,255,255,0.08)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--text-secondary)',
-                  flexShrink: 0,
-                  fontSize: '12px',
-                  fontWeight: 600,
-                }}
-              >
+            <div className="commit-box">
+              <div className="commit-avatar">
                 {updateInfo?.author ? updateInfo.author[0].toUpperCase() : 'G'}
               </div>
 
-              <div style={{ flex: 1 }}>
-                <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', lineHeight: 1.4 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <p className="commit-message-preview">
                   {updateInfo?.commit_message || 'Latest release build'}
                 </p>
-                <div style={{ display: 'flex', gap: '12px', marginTop: '6px', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                <div className="commit-meta-row">
                   <span>Author: {updateInfo?.author || 'nourddinak'}</span>
                   <span>•</span>
-                  <span>Commit: {updateInfo?.latest_short_commit}</span>
+                  <span className="status-mono">Commit: {updateInfo?.latest_short_commit}</span>
                 </div>
               </div>
             </div>
           </div>
 
-          {/* Live Update Runner Terminal (if triggered) */}
-          {(updatePhase !== 'idle' || updateLogs) && (
-            <div
-              style={{
-                background: '#0d1117',
-                border: '1px solid #30363d',
-                borderRadius: '10px',
-                overflow: 'hidden',
-              }}
-            >
-              <div
-                style={{
-                  padding: '10px 16px',
-                  background: '#161b22',
-                  borderBottom: '1px solid #30363d',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                }}
+          {/* Manual SSH Instructions Card (Clickable to open overlay) */}
+          <div className="ssh-card">
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                Prefer CLI update via SSH?
+              </h4>
+              <p style={{ margin: '3px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Run the fast automated updater directly in your server terminal anytime.
+              </p>
+            </div>
+
+            <div className="ssh-actions-row">
+              <button
+                onClick={() => setShowSshOverlay(true)}
+                className="press-scale btn-ssh-guide"
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ff5f56' }} />
-                  <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ffbd2e' }} />
-                  <div style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#27c93f' }} />
-                  <span style={{ fontSize: '12px', color: '#8b949e', marginLeft: '6px', fontFamily: 'monospace' }}>
-                    Server Update Execution (systemd)
+                Guide
+              </button>
+              <button
+                onClick={copyUpdateCommand}
+                className="press-scale btn-ssh-copy"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+                  <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+                </svg>
+                {copiedCmd ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Floating Active Update Pill (When minimized during active update) */}
+      {updatePhase !== 'idle' && !showTerminalOverlay && (
+        <div
+          className="floating-update-pill press-scale"
+          onClick={() => setShowTerminalOverlay(true)}
+        >
+          <div className="pill-pulse-dot" />
+          <span style={{ fontWeight: 600, fontSize: '12px' }}>
+            {updatePhase === 'completed'
+              ? 'Update Completed!'
+              : updatePhase === 'error'
+              ? 'Update Error'
+              : 'Server Update in Progress...'}
+          </span>
+          <span className="pill-view-action">View Logs ↗</span>
+        </div>
+      )}
+
+      {/* OVERLAY 1: Live Terminal / Update Runner Modal Bottom Sheet */}
+      {showTerminalOverlay && (
+        <div className="overlay-backdrop" onClick={() => {
+          if (updatePhase !== 'running') setShowTerminalOverlay(false);
+        }}>
+          <div
+            className="overlay-sheet"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Sheet Handle for Mobile */}
+            <div className="sheet-handle" />
+
+            {/* Overlay Header */}
+            <div className="overlay-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  className={`overlay-status-dot ${
+                    updatePhase === 'completed'
+                      ? 'dot-green'
+                      : updatePhase === 'error'
+                      ? 'dot-red'
+                      : 'dot-orange'
+                  }`}
+                />
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                    Server Update Execution
+                  </h3>
+                  <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                    systemd background worker
                   </span>
                 </div>
+              </div>
 
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <span
-                  style={{
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    padding: '2px 8px',
-                    borderRadius: '4px',
-                    background:
-                      updatePhase === 'completed'
-                        ? 'rgba(48, 209, 88, 0.2)'
-                        : updatePhase === 'error'
-                        ? 'rgba(255, 69, 58, 0.2)'
-                        : 'rgba(255, 159, 10, 0.2)',
-                    color:
-                      updatePhase === 'completed'
-                        ? '#30d158'
-                        : updatePhase === 'error'
-                        ? '#ff453a'
-                        : '#ff9f0a',
-                  }}
+                  className={`badge-pill ${
+                    updatePhase === 'completed'
+                      ? 'badge-uptodate'
+                      : updatePhase === 'error'
+                      ? 'badge-error'
+                      : 'badge-update'
+                  }`}
                 >
                   {updatePhase.toUpperCase()}
                 </span>
+                <button
+                  onClick={() => setShowTerminalOverlay(false)}
+                  className="press-scale overlay-close-btn"
+                  title="Minimize overlay"
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* Stepper Progress Indicator */}
+            <div className="overlay-stepper">
+              <div className={`step-item ${updatePhase !== 'idle' ? 'step-active' : ''}`}>
+                <div className="step-num">1</div>
+                <span>Signal Sent</span>
+              </div>
+              <div className="step-line" />
+              <div className={`step-item ${updatePhase === 'running' || updatePhase === 'reconnecting' || updatePhase === 'completed' ? 'step-active' : ''}`}>
+                <div className="step-num">2</div>
+                <span>Installing</span>
+              </div>
+              <div className="step-line" />
+              <div className={`step-item ${updatePhase === 'reconnecting' || updatePhase === 'completed' ? 'step-active' : ''}`}>
+                <div className="step-num">3</div>
+                <span>Restarting</span>
+              </div>
+              <div className="step-line" />
+              <div className={`step-item ${updatePhase === 'completed' ? 'step-active' : ''}`}>
+                <div className="step-num">4</div>
+                <span>Ready</span>
+              </div>
+            </div>
+
+            {/* Terminal Window */}
+            <div className="overlay-terminal-box">
+              <div className="terminal-topbar">
+                <div style={{ display: 'flex', gap: '6px' }}>
+                  <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#ff5f56' }} />
+                  <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#ffbd2e' }} />
+                  <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#27c93f' }} />
+                </div>
+                <span style={{ fontSize: '11px', color: '#8b949e', fontFamily: 'monospace' }}>
+                  /var/log/ownmediahost/update.log
+                </span>
+                <button
+                  onClick={copyTerminalLogs}
+                  className="terminal-copy-btn"
+                >
+                  Copy Logs
+                </button>
               </div>
 
               <pre
                 ref={logTerminalRef}
-                style={{
-                  margin: 0,
-                  padding: '16px',
-                  maxHeight: '260px',
-                  overflowY: 'auto',
-                  fontFamily: 'SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace',
-                  fontSize: '12px',
-                  lineHeight: '1.5',
-                  color: '#c9d1d9',
-                  background: 'transparent',
-                }}
+                className="terminal-pre"
               >
-                {updateLogs || 'Waiting for systemd runner logs...'}
+                {updateLogs || 'Waiting for systemd runner output...'}
               </pre>
+            </div>
 
-              {updateError && (
-                <div style={{ padding: '12px 16px', background: 'rgba(255, 69, 58, 0.15)', color: '#ff453a', fontSize: '13px' }}>
-                  {updateError}
-                </div>
+            {/* Error Message */}
+            {updateError && (
+              <div className="overlay-error-box">
+                {updateError}
+              </div>
+            )}
+
+            {/* Overlay Footer Actions */}
+            <div className="overlay-footer">
+              <button
+                onClick={() => setShowTerminalOverlay(false)}
+                className="btn btn-secondary press-scale"
+                style={{ flex: 1, padding: '10px' }}
+              >
+                Minimize to Background
+              </button>
+              {updatePhase === 'completed' && (
+                <button
+                  onClick={() => window.location.reload()}
+                  className="btn btn-primary press-scale"
+                  style={{ flex: 1, padding: '10px' }}
+                >
+                  Reload Dashboard Now
+                </button>
               )}
             </div>
-          )}
-
-          {/* Manual SSH Instructions Card */}
-          <div
-            style={{
-              background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-subtle)',
-              borderRadius: '10px',
-              padding: '16px 20px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '12px',
-            }}
-          >
-            <div>
-              <h4 style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                Prefer CLI update via SSH?
-              </h4>
-              <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                You can also run the fast updater directly in your server terminal anytime.
-              </p>
-            </div>
-
-            <button
-              onClick={copyUpdateCommand}
-              className="press-scale"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                background: 'var(--bg-tertiary)',
-                border: '1px solid var(--border-subtle)',
-                borderRadius: '6px',
-                padding: '6px 12px',
-                color: 'var(--text-primary)',
-                fontSize: '12px',
-                cursor: 'pointer',
-              }}
-            >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
-                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
-              </svg>
-              {copiedCmd ? 'Copied Command!' : 'Copy CLI Command'}
-            </button>
           </div>
         </div>
       )}
+
+      {/* OVERLAY 2: Commit Details Modal Bottom Sheet */}
+      {showCommitOverlay && (
+        <div className="overlay-backdrop" onClick={() => setShowCommitOverlay(false)}>
+          <div className="overlay-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-handle" />
+
+            <div className="overlay-header">
+              <div>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  Commit Details
+                </h3>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                  GitHub Main Branch
+                </span>
+              </div>
+              <button
+                onClick={() => setShowCommitOverlay(false)}
+                className="press-scale overlay-close-btn"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="overlay-body">
+              {/* Commit Message Box */}
+              <div style={{ background: 'var(--bg-tertiary)', borderRadius: '10px', padding: '14px', border: '1px solid var(--border-subtle)' }}>
+                <div style={{ fontSize: '11px', textTransform: 'uppercase', color: 'var(--text-tertiary)', fontWeight: 600, marginBottom: '6px' }}>
+                  Commit Message
+                </div>
+                <div style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', whiteSpace: 'pre-wrap', lineHeight: 1.5 }}>
+                  {updateInfo?.commit_message || 'Latest release build'}
+                </div>
+              </div>
+
+              {/* Author & Timestamp */}
+              <div className="status-rows-container" style={{ marginTop: '16px' }}>
+                <div className="status-row">
+                  <span className="status-label">Author</span>
+                  <span className="status-value">{updateInfo?.author || 'nourddinak'}</span>
+                </div>
+                <div className="status-row">
+                  <span className="status-label">Published At</span>
+                  <span className="status-value">
+                    {updateInfo?.published_at ? new Date(updateInfo.published_at).toLocaleString() : 'Recent'}
+                  </span>
+                </div>
+                <div className="status-row">
+                  <span className="status-label">Commit SHA</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <span className="status-value status-mono" style={{ fontSize: '11px' }}>
+                      {updateInfo?.latest_commit ? updateInfo.latest_commit.substring(0, 12) : ''}
+                    </span>
+                    <button
+                      onClick={() => copySha(updateInfo?.latest_commit || '')}
+                      className="press-scale"
+                      style={{ fontSize: '10px', background: 'var(--bg-tertiary)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--border-subtle)', color: 'var(--text-secondary)' }}
+                    >
+                      {copiedSha ? 'Copied!' : 'Copy'}
+                    </button>
+                  </div>
+                </div>
+                <div className="status-row">
+                  <span className="status-label">Release Tag</span>
+                  <span className="status-value">{updateInfo?.release_tag || 'latest'}</span>
+                </div>
+              </div>
+
+              {/* GitHub Link Button */}
+              <div style={{ marginTop: '20px' }}>
+                <a
+                  href={`https://github.com/nourddinak/OwnMediaHost/commit/${updateInfo?.latest_commit}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="btn btn-primary press-scale"
+                  style={{ width: '100%', padding: '11px', display: 'flex', justifyContent: 'center', gap: '6px', fontSize: '13px' }}
+                >
+                  View Commit on GitHub ↗
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* OVERLAY 3: SSH CLI Instructions Sheet */}
+      {showSshOverlay && (
+        <div className="overlay-backdrop" onClick={() => setShowSshOverlay(false)}>
+          <div className="overlay-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="sheet-handle" />
+
+            <div className="overlay-header">
+              <div>
+                <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>
+                  SSH CLI Update Instructions
+                </h3>
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                  Manual update via terminal
+                </span>
+              </div>
+              <button
+                onClick={() => setShowSshOverlay(false)}
+                className="press-scale overlay-close-btn"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="overlay-body">
+              <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 16px', lineHeight: 1.5 }}>
+                Connect to your VPS via SSH and execute the automated updater. The script detects your configuration, downloads verified binaries, and restarts systemd in ~5 seconds.
+              </p>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {/* Step 1 */}
+                <div className="cli-step-box">
+                  <div className="cli-step-header">
+                    <span className="cli-step-num">Step 1</span>
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Run 1-line fast updater</span>
+                  </div>
+                  <pre className="cli-code-block">
+                    sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/nourddinak/OwnMediaHost/main/scripts/update.sh)"
+                  </pre>
+                  <button
+                    onClick={copyUpdateCommand}
+                    className="btn btn-secondary press-scale"
+                    style={{ width: '100%', padding: '8px', fontSize: '12px', marginTop: '8px' }}
+                  >
+                    {copiedCmd ? '✓ Command Copied!' : 'Copy Update Command'}
+                  </button>
+                </div>
+
+                {/* Step 2 */}
+                <div className="cli-step-box">
+                  <div className="cli-step-header">
+                    <span className="cli-step-num">Step 2</span>
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Verify systemd service health</span>
+                  </div>
+                  <pre className="cli-code-block">
+                    sudo systemctl status ownmediahost
+                  </pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Mobile-First Responsive Styles */}
+      <style>{`
+        .updates-container {
+          max-width: 960px;
+          margin: 0 auto;
+          padding: 24px 20px 80px 20px;
+        }
+
+        .updates-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 16px;
+          margin-bottom: 24px;
+        }
+
+        .updates-title-group {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .updates-main-title {
+          font-size: 22px;
+          font-weight: 600;
+          letter-spacing: -0.02em;
+          margin: 0;
+          color: var(--text-primary);
+        }
+
+        .updates-subtitle {
+          color: var(--text-secondary);
+          font-size: 13px;
+          margin: 4px 0 0;
+        }
+
+        .updates-check-btn {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          background: var(--bg-secondary);
+          border: 1px solid var(--border-subtle);
+          border-radius: 8px;
+          padding: 8px 14px;
+          color: var(--text-primary);
+          font-size: 13px;
+          font-weight: 500;
+          cursor: pointer;
+          transition: all 0.15s ease;
+          flex-shrink: 0;
+        }
+
+        .hero-card {
+          border-radius: 14px;
+          padding: 22px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 16px;
+          transition: all 0.2s ease;
+        }
+
+        .hero-uptodate {
+          background: linear-gradient(135deg, rgba(48, 209, 88, 0.1), rgba(0, 122, 255, 0.03));
+          border: 1px solid rgba(48, 209, 88, 0.25);
+        }
+
+        .hero-update {
+          background: linear-gradient(135deg, rgba(255, 159, 10, 0.14), rgba(255, 100, 0, 0.05));
+          border: 1px solid rgba(255, 159, 10, 0.35);
+        }
+
+        .hero-building {
+          background: linear-gradient(135deg, rgba(10, 132, 255, 0.12), rgba(255, 159, 10, 0.06));
+          border: 1px solid rgba(10, 132, 255, 0.3);
+        }
+
+        .hero-content-wrapper {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+          flex: 1;
+          min-width: 0;
+        }
+
+        .hero-icon-box {
+          width: 44px;
+          height: 44px;
+          border-radius: 12px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+        }
+
+        .icon-uptodate {
+          background: rgba(48, 209, 88, 0.2);
+          color: #30d158;
+        }
+
+        .icon-update {
+          background: rgba(255, 159, 10, 0.2);
+          color: #ff9f0a;
+        }
+
+        .icon-building {
+          background: rgba(10, 132, 255, 0.2);
+          color: #0a84ff;
+        }
+
+        .badge-pill {
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.04em;
+          padding: 2px 7px;
+          border-radius: 8px;
+        }
+
+        .badge-uptodate {
+          background: rgba(48, 209, 88, 0.2);
+          color: #30d158;
+        }
+
+        .badge-update {
+          background: rgba(255, 159, 10, 0.2);
+          color: #ff9f0a;
+        }
+
+        .badge-building {
+          background: rgba(10, 132, 255, 0.2);
+          color: #0a84ff;
+        }
+
+        .badge-error {
+          background: rgba(255, 69, 58, 0.2);
+          color: #ff453a;
+        }
+
+        .btn-update-action {
+          background: #ff9f0a;
+          color: #000;
+          border: none;
+          border-radius: 8px;
+          padding: 10px 18px;
+          font-weight: 600;
+          font-size: 13px;
+          cursor: pointer;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          box-shadow: 0 4px 12px rgba(255, 159, 10, 0.25);
+          flex-shrink: 0;
+        }
+
+        .btn-building-action {
+          background: rgba(255, 255, 255, 0.05);
+          color: var(--text-tertiary);
+          border: 1px solid var(--border-subtle);
+          border-radius: 8px;
+          padding: 10px 16px;
+          font-weight: 500;
+          font-size: 13px;
+          cursor: not-allowed;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+          flex-shrink: 0;
+        }
+
+        .details-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+          gap: 16px;
+        }
+
+        .details-card {
+          background: var(--bg-secondary);
+          border: 1px solid var(--border-subtle);
+          border-radius: 12px;
+          padding: 18px;
+        }
+
+        .details-card-title {
+          font-size: 11px;
+          font-weight: 600;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          color: var(--text-tertiary);
+          margin: 0 0 12px;
+        }
+
+        .status-rows-container {
+          display: flex;
+          flex-direction: column;
+        }
+
+        .status-row {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 8px 0;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+
+        .status-row:last-child {
+          border-bottom: none;
+          padding-bottom: 0;
+        }
+
+        .status-label {
+          color: var(--text-secondary);
+          font-size: 13px;
+          flex-shrink: 0;
+        }
+
+        .status-value {
+          color: var(--text-primary);
+          font-size: 13px;
+          text-align: right;
+          word-break: break-all;
+        }
+
+        .status-mono {
+          font-family: var(--font-mono);
+          font-weight: 600;
+        }
+
+        .status-link {
+          color: var(--accent-blue);
+          text-decoration: none;
+          font-size: 13px;
+        }
+
+        .changelog-trigger {
+          cursor: pointer;
+          transition: border-color 0.15s ease, transform 0.15s ease;
+        }
+
+        .changelog-trigger:hover {
+          border-color: var(--border-medium);
+        }
+
+        .view-details-link {
+          font-size: 12px;
+          color: var(--accent-blue);
+          font-weight: 500;
+        }
+
+        .commit-box {
+          background: var(--bg-tertiary);
+          border-radius: 8px;
+          padding: 12px 14px;
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+        }
+
+        .commit-avatar {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.08);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: var(--text-secondary);
+          flex-shrink: 0;
+          font-size: 12px;
+          font-weight: 600;
+        }
+
+        .commit-message-preview {
+          margin: 0;
+          font-size: 13px;
+          font-weight: 500;
+          color: var(--text-primary);
+          line-height: 1.4;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+
+        .commit-meta-row {
+          display: flex;
+          gap: 10px;
+          margin-top: 6px;
+          font-size: 11px;
+          color: var(--text-tertiary);
+          flex-wrap: wrap;
+        }
+
+        .ssh-card {
+          background: var(--bg-secondary);
+          border: 1px solid var(--border-subtle);
+          border-radius: 12px;
+          padding: 16px 18px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 12px;
+        }
+
+        .ssh-actions-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+
+        .btn-ssh-guide {
+          background: var(--bg-tertiary);
+          border: 1px solid var(--border-subtle);
+          border-radius: 6px;
+          padding: 6px 12px;
+          color: var(--text-primary);
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+        }
+
+        .btn-ssh-copy {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          background: var(--bg-tertiary);
+          border: 1px solid var(--border-subtle);
+          border-radius: 6px;
+          padding: 6px 12px;
+          color: var(--text-primary);
+          font-size: 12px;
+          font-weight: 500;
+          cursor: pointer;
+        }
+
+        /* Floating Active Pill */
+        .floating-update-pill {
+          position: fixed;
+          bottom: 24px;
+          left: 50%;
+          transform: translateX(-50%);
+          background: rgba(22, 22, 24, 0.95);
+          backdrop-filter: blur(16px);
+          -webkit-backdrop-filter: blur(16px);
+          border: 1px solid rgba(255, 159, 10, 0.4);
+          box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+          border-radius: 9999px;
+          padding: 8px 18px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          z-index: 80;
+          cursor: pointer;
+          animation: floatBounce 0.3s ease;
+        }
+
+        .pill-pulse-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          background: #ff9f0a;
+          box-shadow: 0 0 8px #ff9f0a;
+          animation: pulse 1.5s infinite;
+        }
+
+        .pill-view-action {
+          font-size: 11px;
+          color: var(--accent-blue);
+          font-weight: 600;
+        }
+
+        /* Modals & Overlays */
+        .overlay-backdrop {
+          position: fixed;
+          inset: 0;
+          background: rgba(0, 0, 0, 0.7);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          z-index: 100;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 16px;
+          animation: fadeIn 0.15s ease;
+        }
+
+        .overlay-sheet {
+          background: #121214;
+          border: 1px solid var(--border-medium);
+          border-radius: 16px;
+          width: 100%;
+          max-width: 620px;
+          max-height: 90vh;
+          overflow-y: auto;
+          box-shadow: var(--shadow-lg);
+          display: flex;
+          flex-direction: column;
+          position: relative;
+          animation: scaleUp 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .sheet-handle {
+          display: none;
+          width: 36px;
+          height: 4px;
+          background: rgba(255, 255, 255, 0.2);
+          border-radius: 2px;
+          margin: 8px auto 0;
+        }
+
+        .overlay-header {
+          padding: 16px 20px;
+          border-bottom: 1px solid var(--border-subtle);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        .overlay-close-btn {
+          width: 28px;
+          height: 28px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.08);
+          color: var(--text-secondary);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 13px;
+          cursor: pointer;
+        }
+
+        .overlay-body {
+          padding: 20px;
+        }
+
+        .overlay-status-dot {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+        }
+
+        .dot-green {
+          background: #30d158;
+          box-shadow: 0 0 8px #30d158;
+        }
+
+        .dot-orange {
+          background: #ff9f0a;
+          box-shadow: 0 0 8px #ff9f0a;
+          animation: pulse 1.5s infinite;
+        }
+
+        .dot-red {
+          background: #ff453a;
+          box-shadow: 0 0 8px #ff453a;
+        }
+
+        .overlay-stepper {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 14px 20px;
+          background: rgba(255, 255, 255, 0.02);
+          border-bottom: 1px solid var(--border-subtle);
+        }
+
+        .step-item {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11px;
+          color: var(--text-tertiary);
+          font-weight: 500;
+        }
+
+        .step-item.step-active {
+          color: var(--text-primary);
+        }
+
+        .step-num {
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          background: rgba(255, 255, 255, 0.1);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 10px;
+          font-weight: 700;
+        }
+
+        .step-item.step-active .step-num {
+          background: #0a84ff;
+          color: #fff;
+        }
+
+        .step-line {
+          flex: 1;
+          height: 1px;
+          background: rgba(255, 255, 255, 0.08);
+          margin: 0 8px;
+        }
+
+        .overlay-terminal-box {
+          margin: 16px 20px;
+          background: #090a0d;
+          border: 1px solid #2d3139;
+          border-radius: 10px;
+          overflow: hidden;
+        }
+
+        .terminal-topbar {
+          padding: 8px 12px;
+          background: #14171d;
+          border-bottom: 1px solid #2d3139;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+        }
+
+        .terminal-copy-btn {
+          background: transparent;
+          color: #8b949e;
+          font-size: 11px;
+          padding: 2px 6px;
+          border-radius: 4px;
+          cursor: pointer;
+        }
+
+        .terminal-copy-btn:hover {
+          color: #c9d1d9;
+          background: rgba(255, 255, 255, 0.06);
+        }
+
+        .terminal-pre {
+          margin: 0;
+          padding: 14px;
+          max-height: 280px;
+          overflow-y: auto;
+          font-family: var(--font-mono);
+          font-size: 12px;
+          line-height: 1.5;
+          color: #c9d1d9;
+          background: transparent;
+        }
+
+        .overlay-error-box {
+          margin: 0 20px 14px 20px;
+          padding: 12px;
+          background: rgba(255, 69, 58, 0.15);
+          border: 1px solid rgba(255, 69, 58, 0.3);
+          border-radius: 8px;
+          color: #ff453a;
+          font-size: 13px;
+        }
+
+        .overlay-footer {
+          padding: 14px 20px;
+          border-top: 1px solid var(--border-subtle);
+          display: flex;
+          gap: 10px;
+        }
+
+        .cli-step-box {
+          background: var(--bg-tertiary);
+          border: 1px solid var(--border-subtle);
+          border-radius: 8px;
+          padding: 12px;
+        }
+
+        .cli-step-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 8px;
+        }
+
+        .cli-step-num {
+          font-size: 10px;
+          font-weight: 700;
+          padding: 2px 6px;
+          border-radius: 4px;
+          background: rgba(10, 132, 255, 0.2);
+          color: #0a84ff;
+        }
+
+        .cli-code-block {
+          background: #090a0d;
+          border: 1px solid rgba(255, 255, 255, 0.06);
+          border-radius: 6px;
+          padding: 10px;
+          margin: 0;
+          font-family: var(--font-mono);
+          font-size: 12px;
+          color: #e6edf3;
+          white-space: pre-wrap;
+          word-break: break-all;
+        }
+
+        /* Mobile Adjustments (max-width: 640px) */
+        @media (max-width: 640px) {
+          .updates-container {
+            padding: 16px 12px 90px 12px;
+          }
+
+          .updates-header {
+            flex-direction: column;
+            align-items: stretch;
+            gap: 12px;
+            margin-bottom: 16px;
+          }
+
+          .updates-main-title {
+            font-size: 18px;
+          }
+
+          .updates-subtitle {
+            font-size: 12px;
+          }
+
+          .updates-check-btn {
+            width: 100%;
+            justify-content: center;
+            padding: 10px 14px;
+          }
+
+          .hero-card {
+            padding: 16px;
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .hero-content-wrapper {
+            align-items: flex-start;
+          }
+
+          .btn-update-action, .btn-building-action {
+            width: 100%;
+          }
+
+          .details-card {
+            padding: 14px;
+          }
+
+          .status-row {
+            padding: 6px 0;
+          }
+
+          .status-label, .status-value {
+            font-size: 12px;
+          }
+
+          .overlay-backdrop {
+            padding: 0;
+            align-items: flex-end;
+          }
+
+          .overlay-sheet {
+            border-radius: 20px 20px 0 0;
+            max-height: 85vh;
+            animation: slideUpBottom 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+          }
+
+          .sheet-handle {
+            display: block;
+          }
+
+          .overlay-stepper {
+            padding: 10px 14px;
+          }
+
+          .overlay-terminal-box {
+            margin: 12px 14px;
+          }
+
+          .overlay-footer {
+            padding: 12px 14px;
+            flex-direction: column;
+          }
+
+          .ssh-card {
+            flex-direction: column;
+            align-items: stretch;
+            padding: 14px;
+          }
+
+          .ssh-actions-row {
+            width: 100%;
+          }
+
+          .btn-ssh-guide, .btn-ssh-copy {
+            flex: 1;
+            justify-content: center;
+            padding: 8px 12px;
+          }
+        }
+
+        @keyframes scaleUp {
+          from { transform: scale(0.95); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
+
+        @keyframes slideUpBottom {
+          from { transform: translateY(100%); }
+          to { transform: translateY(0); }
+        }
+
+        @keyframes floatBounce {
+          from { transform: translate(-50%, 20px); opacity: 0; }
+          to { transform: translate(-50%, 0); opacity: 1; }
+        }
+
+        @keyframes pulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(0.9); }
+        }
+      `}</style>
     </div>
   );
 };

@@ -21,7 +21,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   return (
     <header className="header-bar">
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: '1 1 auto' }}>
         <button
           onClick={onToggleMobileSidebar}
           style={{
@@ -29,8 +29,10 @@ export const Header: React.FC<HeaderProps> = ({
             padding: '6px',
             borderRadius: '6px',
             color: 'var(--text-secondary)',
+            flexShrink: 0,
           }}
           className="mobile-menu-btn"
+          aria-label="Open menu"
         >
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <line x1="4" x2="20" y1="12" y2="12"/>
@@ -51,6 +53,7 @@ export const Header: React.FC<HeaderProps> = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
+            flexShrink: 0,
           }}
         >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -60,12 +63,25 @@ export const Header: React.FC<HeaderProps> = ({
           </svg>
         </button>
 
-        <h1 style={{ fontSize: '17px', fontWeight: 600 }}>{title}</h1>
+        <h1
+          className="header-title"
+          style={{
+            fontSize: '16px',
+            fontWeight: 600,
+            margin: 0,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {title}
+        </h1>
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
         {/* Search Bar */}
         <div
+          className="header-search-bar"
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -75,9 +91,10 @@ export const Header: React.FC<HeaderProps> = ({
             borderRadius: 'var(--radius-sm)',
             padding: '5px 10px',
             width: '240px',
+            transition: 'all var(--transition-fast)',
           }}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
             <circle cx="11" cy="11" r="8"/>
             <path d="m21 21-4.3-4.3"/>
           </svg>
@@ -93,12 +110,13 @@ export const Header: React.FC<HeaderProps> = ({
               color: 'var(--text-primary)',
               fontSize: '13px',
               width: '100%',
+              minWidth: 0,
             }}
           />
           {searchTerm && (
             <button
               onClick={() => onSearchChange('')}
-              style={{ color: 'var(--text-tertiary)', fontSize: '11px' }}
+              style={{ color: 'var(--text-tertiary)', fontSize: '11px', flexShrink: 0 }}
             >
               ✕
             </button>
@@ -108,16 +126,18 @@ export const Header: React.FC<HeaderProps> = ({
         {/* Upload Button */}
         <button
           onClick={onOpenUpload}
-          className="btn btn-primary press-scale"
+          className="btn btn-primary press-scale header-upload-btn"
           title="Upload media (Hotkey: U)"
+          style={{ flexShrink: 0 }}
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
             <polyline points="17 8 12 3 7 8"/>
             <line x1="12" x2="12" y1="3" y2="15"/>
           </svg>
-          Upload
+          <span className="header-upload-label">Upload</span>
           <span
+            className="header-upload-key"
             style={{
               fontSize: '10px',
               opacity: 0.6,
@@ -135,6 +155,19 @@ export const Header: React.FC<HeaderProps> = ({
       <style>{`
         @media (max-width: 768px) {
           .mobile-menu-btn { display: flex !important; }
+          .sidebar-toggle-btn { display: none !important; }
+          .header-bar { padding: 0 12px !important; }
+        }
+        @media (max-width: 640px) {
+          .header-title { font-size: 15px !important; }
+          .header-search-bar { width: 130px !important; padding: 5px 8px !important; }
+          .header-search-bar input::placeholder { font-size: 12px; }
+          .header-upload-label, .header-upload-key { display: none !important; }
+          .header-upload-btn { padding: 8px !important; min-width: 36px; min-height: 36px; }
+        }
+        @media (max-width: 480px) {
+          .header-search-bar { display: none !important; }
+          .header-title { font-size: 15px !important; max-width: 220px; }
         }
       `}</style>
     </header>
