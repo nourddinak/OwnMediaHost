@@ -72,3 +72,6 @@ logs/
 tmp/
 temp/
 
+# --- Nested Status Repository Internal Workflows ---
+/status/.github/
+
