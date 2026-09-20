@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from './context/AuthContext';
+import { useDataRefresh } from './context/DataRefreshContext';
 import { useToast } from './context/ToastContext';
 import { Sidebar, PageView } from './components/layout/Sidebar';
 import { Header } from './components/layout/Header';
@@ -37,7 +38,7 @@ export const App: React.FC = () => {
     }
   });
   const [folders, setFolders] = useState<FolderItem[]>([]);
-  const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const { version: refreshTrigger, refresh: triggerRefresh } = useDataRefresh();
   const [selectedFolderId, setSelectedFolderId] = useState<string>('');
 
   const handleToggleSidebarCollapse = useCallback(() => {
@@ -248,9 +249,7 @@ export const App: React.FC = () => {
     }
   };
 
-  const triggerRefresh = () => {
-    setRefreshTrigger((prev) => prev + 1);
-  };
+  // triggerRefresh is provided by useDataRefresh above
 
   const handleSelectView = (view: PageView) => {
     if (view !== 'media') {

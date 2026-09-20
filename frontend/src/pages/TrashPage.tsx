@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api, MediaItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
+import { useDataRefresh } from '../context/DataRefreshContext';
 import { Pagination } from '../components/common/Pagination';
 import { formatBytes } from '../utils/formatters';
 
 export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChanged }) => {
   const { toast } = useToast();
+  const { refresh: globalRefresh } = useDataRefresh();
   const [items, setItems] = useState<MediaItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -36,29 +38,50 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
     fetchTrash(page, pageSize);
   }, [page, pageSize, fetchTrash]);
 
+  /** Optimistically remove items from the local list by IDs. */
+  const optimisticRemove = (ids: Set<string> | string[]) => {
+    const idSet = ids instanceof Set ? ids : new Set(ids);
+    setItems((prev) => prev.filter((item) => !idSet.has(item.id)));
+    setTotal((prev) => Math.max(0, prev - idSet.size));
+    setSelected((prev) => {
+      const next = new Set(prev);
+      for (const id of idSet) next.delete(id);
+      return next;
+    });
+  };
+
   const handleRestore = async (id: string, name: string) => {
+    // Optimistic: remove from list immediately
+    optimisticRemove([id]);
+    toast(`Restored '${name}'`);
     try {
       await api.restoreFile(id);
-      toast(`Restored '${name}'`);
-      fetchTrash(page, pageSize);
-      onDataChanged();
     } catch (err: any) {
+      // Rollback on failure: re-fetch
       toast(err.message, 'error');
+      fetchTrash(page, pageSize);
+      return;
     }
+    globalRefresh();
+    onDataChanged();
   };
 
   const handlePermanentDelete = async (id: string, name: string) => {
     if (!confirm(`Permanently delete '${name}'? This physically erases the file from disk and cannot be undone.`)) {
       return;
     }
+    // Optimistic: remove from list immediately
+    optimisticRemove([id]);
+    toast(`Permanently deleted '${name}'`);
     try {
       await api.permanentDeleteFile(id);
-      toast(`Permanently deleted '${name}'`);
-      fetchTrash(page, pageSize);
-      onDataChanged();
     } catch (err: any) {
       toast(err.message, 'error');
+      fetchTrash(page, pageSize);
+      return;
     }
+    globalRefresh();
+    onDataChanged();
   };
 
   const handleEmptyTrash = async () => {
@@ -68,23 +91,25 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
     }
     try {
       setBulkLoading(true);
-      // Need to delete ALL trash items, not just current page
       let allIds: string[] = [];
       if (total <= pageSize) {
         allIds = items.map((i) => i.id);
       } else {
-        // Fetch all IDs across pages
         const allRes = await api.listFiles({ trash: true, limit: total, offset: 0 });
         allIds = allRes.items.map((i) => i.id);
       }
-      await api.bulkOperation({ ids: allIds, action: 'permanent_delete' });
-      toast('Trash emptied');
-      setPage(1);
+      // Optimistic: clear everything
+      setItems([]);
+      setTotal(0);
       setSelected(new Set());
-      fetchTrash(1, pageSize);
+      toast('Trash emptied');
+      await api.bulkOperation({ ids: allIds, action: 'permanent_delete' });
+      setPage(1);
+      globalRefresh();
       onDataChanged();
     } catch (err: any) {
       toast(err.message, 'error');
+      fetchTrash(1, pageSize);
     } finally {
       setBulkLoading(false);
     }
@@ -114,15 +139,18 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
   const handleBulkRestore = async () => {
     if (selected.size === 0) return;
     const count = selected.size;
+    const ids = Array.from(selected);
+    // Optimistic: remove immediately
+    optimisticRemove(selected);
+    toast(`Restored ${count} item${count > 1 ? 's' : ''}`);
     try {
       setBulkLoading(true);
-      await api.bulkOperation({ ids: Array.from(selected), action: 'restore' });
-      toast(`Restored ${count} item${count > 1 ? 's' : ''}`);
-      setSelected(new Set());
-      fetchTrash(page, pageSize);
+      await api.bulkOperation({ ids, action: 'restore' });
+      globalRefresh();
       onDataChanged();
     } catch (err: any) {
       toast(err.message, 'error');
+      fetchTrash(page, pageSize);
     } finally {
       setBulkLoading(false);
     }
@@ -138,15 +166,18 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
     ) {
       return;
     }
+    const ids = Array.from(selected);
+    // Optimistic: remove immediately
+    optimisticRemove(selected);
+    toast(`Permanently deleted ${count} item${count > 1 ? 's' : ''}`);
     try {
       setBulkLoading(true);
-      await api.bulkOperation({ ids: Array.from(selected), action: 'permanent_delete' });
-      toast(`Permanently deleted ${count} item${count > 1 ? 's' : ''}`);
-      setSelected(new Set());
-      fetchTrash(page, pageSize);
+      await api.bulkOperation({ ids, action: 'permanent_delete' });
+      globalRefresh();
       onDataChanged();
     } catch (err: any) {
       toast(err.message, 'error');
+      fetchTrash(page, pageSize);
     } finally {
       setBulkLoading(false);
     }
