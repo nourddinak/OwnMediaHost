@@ -364,6 +364,8 @@ export const api = {
   listAliases: () => request<AliasItem[]>('/aliases'),
   createAlias: (data: { alias_path: string; media_id: string }) =>
     request<AliasItem>('/aliases', { method: 'POST', body: JSON.stringify(data) }),
+  updateAlias: (id: string, data: { media_id: string }) =>
+    request<AliasItem>(`/aliases/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteAlias: (id: string) => request(`/aliases/${id}`, { method: 'DELETE' }),
 
   // Keys
