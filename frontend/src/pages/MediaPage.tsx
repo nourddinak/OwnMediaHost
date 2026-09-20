@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api, MediaItem, FolderItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
+import { useOnDataRefresh } from '../context/DataRefreshContext';
 import { MediaCard } from '../components/media/MediaCard';
 import { MediaDetailDrawer } from '../components/media/MediaDetailDrawer';
 import { Pagination } from '../components/common/Pagination';
@@ -51,37 +52,48 @@ export const MediaPage: React.FC<MediaPageProps> = ({
     setAnchorId(null);
   }, [searchTerm, selectedFolder, sortBy, mediaTypeFilter]);
 
-  const fetchMedia = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await api.listFiles({
-        type: mediaTypeFilter,
-        folder_id: selectedFolder || undefined,
-        search: searchTerm || undefined,
-        sort: sortBy,
-        limit: pageSize,
-        offset: (page - 1) * pageSize,
-      });
-      setMediaList(res.items);
-      setTotal(res.total);
+  const fetchMedia = useCallback(
+    async (isBackground = false) => {
+      if (!isBackground) {
+        setLoading(true);
+      }
+      try {
+        const res = await api.listFiles({
+          type: mediaTypeFilter,
+          folder_id: selectedFolder || undefined,
+          search: searchTerm || undefined,
+          sort: sortBy,
+          limit: pageSize,
+          offset: (page - 1) * pageSize,
+        });
+        setMediaList(res.items);
+        setTotal(res.total);
 
-      // Sync the detail drawer with fresh data so changes (visibility, tags, etc.)
-      // appear immediately without requiring a page refresh
-      setActiveMedia((prev) => {
-        if (!prev) return null;
-        const updated = res.items.find((item: MediaItem) => item.id === prev.id);
-        return updated || null;
-      });
-    } catch (err: any) {
-      toast(err.message || 'Failed to fetch media', 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, [mediaTypeFilter, selectedFolder, searchTerm, sortBy, page, pageSize, toast]);
+        // Sync the detail drawer with fresh data so changes (visibility, tags, etc.)
+        // appear immediately without requiring a page refresh
+        setActiveMedia((prev) => {
+          if (!prev) return null;
+          const updated = res.items.find((item: MediaItem) => item.id === prev.id);
+          return updated || null;
+        });
+      } catch (err: any) {
+        toast(err.message || 'Failed to fetch media', 'error');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [mediaTypeFilter, selectedFolder, searchTerm, sortBy, page, pageSize, toast]
+  );
 
   useEffect(() => {
-    fetchMedia();
+    // Preserve existing items during refresh triggers to avoid UI flickering
+    fetchMedia(mediaList.length > 0);
   }, [fetchMedia, refreshTrigger]);
+
+  // Subscribe to real-time data bus events across tabs and other pages
+  useOnDataRefresh(() => {
+    fetchMedia(true);
+  });
 
   const handleCardClick = (media: MediaItem) => {
     setActiveMedia(media);
@@ -182,48 +194,90 @@ export const MediaPage: React.FC<MediaPageProps> = ({
 
   const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
+    const idsToDelete = new Set(selectedIds);
+    const count = selectedIds.length;
+
+    // Optimistically remove from view immediately
+    setMediaList((prev) => prev.filter((m) => !idsToDelete.has(m.id)));
+    setTotal((prev) => Math.max(0, prev - count));
+    setSelectedIds([]);
+    setAnchorId(null);
+    toast(`Moved ${count} item${count > 1 ? 's' : ''} to trash`);
+
+    // Notify other components and tabs in real-time
+    onDataChanged();
+
     try {
       await api.bulkOperation({
-        ids: selectedIds,
+        ids: Array.from(idsToDelete),
         action: 'delete',
       });
-      toast(`Moved ${selectedIds.length} items to trash`);
-      setSelectedIds([]);
-      setAnchorId(null);
-      fetchMedia();
-      onDataChanged();
+      fetchMedia(true);
     } catch (err: any) {
-      toast(err.message, 'error');
+      toast(err.message || 'Bulk delete failed', 'error');
+      fetchMedia(false);
     }
   };
 
   const handleBulkMove = async (targetFolderId: string) => {
     if (selectedIds.length === 0) return;
+    const idsToMove = new Set(selectedIds);
+    const count = selectedIds.length;
+
+    // Optimistically update folder assignments in view
+    if (selectedFolder && selectedFolder !== targetFolderId) {
+      setMediaList((prev) => prev.filter((m) => !idsToMove.has(m.id)));
+      setTotal((prev) => Math.max(0, prev - count));
+    } else {
+      setMediaList((prev) =>
+        prev.map((m) =>
+          idsToMove.has(m.id)
+            ? {
+                ...m,
+                folder_id: targetFolderId === 'root' ? undefined : targetFolderId,
+                folder_name: folders.find((f) => f.id === targetFolderId)?.name || undefined,
+              }
+            : m
+        )
+      );
+    }
+    setSelectedIds([]);
+    setAnchorId(null);
+    toast(`Moved ${count} item${count > 1 ? 's' : ''}`);
+
+    onDataChanged();
+
     try {
       await api.bulkOperation({
-        ids: selectedIds,
+        ids: Array.from(idsToMove),
         action: 'move',
-        target_folder_id: targetFolderId,
+        target_folder_id: targetFolderId === 'root' ? undefined : targetFolderId,
       });
-      toast(`Moved ${selectedIds.length} items`);
-      setSelectedIds([]);
-      setAnchorId(null);
-      fetchMedia();
-      onDataChanged();
+      fetchMedia(true);
     } catch (err: any) {
-      toast(err.message, 'error');
+      toast(err.message || 'Bulk move failed', 'error');
+      fetchMedia(false);
     }
   };
 
   const handleDeleteSingle = async (item: MediaItem) => {
+    const deletedId = item.id;
+
+    // Optimistically remove from view and close drawer immediately
+    setMediaList((prev) => prev.filter((m) => m.id !== deletedId));
+    setTotal((prev) => Math.max(0, prev - 1));
+    setSelectedIds((prev) => prev.filter((id) => id !== deletedId));
+    setActiveMedia(null);
+    toast('Moved to trash');
+
+    onDataChanged();
+
     try {
-      await api.deleteFile(item.id);
-      toast('Moved to trash');
-      setActiveMedia(null);
-      fetchMedia();
-      onDataChanged();
+      await api.deleteFile(deletedId);
+      fetchMedia(true);
     } catch (err: any) {
-      toast(err.message, 'error');
+      toast(err.message || 'Failed to move to trash', 'error');
+      fetchMedia(false);
     }
   };
 
@@ -418,7 +472,7 @@ export const MediaPage: React.FC<MediaPageProps> = ({
       </div>
 
       {/* Main Content Area */}
-      {loading ? (
+      {loading && mediaList.length === 0 ? (
         <div style={{ padding: '60px 0', textAlign: 'center', color: 'var(--text-tertiary)' }}>
           Loading media...
         </div>

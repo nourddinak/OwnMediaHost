@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api, ApiKeyItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
+import { useDataRefresh, useOnDataRefresh } from '../context/DataRefreshContext';
 import { copyWithToast } from '../utils/clipboard';
 import { Pagination } from '../components/common/Pagination';
 
 export const ApiKeysPage: React.FC = () => {
   const { toast } = useToast();
+  const { refresh: globalRefresh } = useDataRefresh();
   const [keys, setKeys] = useState<ApiKeyItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -31,21 +33,28 @@ export const ApiKeysPage: React.FC = () => {
     { id: 'admin', label: 'admin (Full unrestricted administrative access)' },
   ];
 
-  const fetchKeys = async () => {
-    setLoading(true);
+  const fetchKeys = useCallback(async (isBackground = false) => {
+    if (!isBackground) {
+      setLoading(true);
+    }
     try {
       const items = await api.listKeys();
       setKeys(items);
     } catch (err: any) {
-      toast(err.message, 'error');
+      toast(err.message || 'Failed to fetch API keys', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
-    fetchKeys();
-  }, []);
+    fetchKeys(false);
+  }, [fetchKeys]);
+
+  // Subscribe to real-time data bus events
+  useOnDataRefresh(() => {
+    fetchKeys(true);
+  });
 
   const handleCreate = async () => {
     if (!name.trim()) {
@@ -61,9 +70,10 @@ export const ApiKeysPage: React.FC = () => {
       setNewlyCreatedKey(created);
       setName('');
       setCreating(false);
-      fetchKeys();
+      globalRefresh('keys');
+      fetchKeys(true);
     } catch (err: any) {
-      toast(err.message, 'error');
+      toast(err.message || 'Failed to create key', 'error');
     }
   };
 
@@ -71,12 +81,20 @@ export const ApiKeysPage: React.FC = () => {
     if (!confirm(`Are you sure you want to revoke API key '${keyName}'? Any services using it will immediately be blocked.`)) {
       return;
     }
+
+    // Optimistic revoke
+    setKeys((prev) =>
+      prev.map((k) => (k.id === id ? { ...k, revoked_at: new Date().toISOString() } : k))
+    );
+    toast('API key revoked');
+    globalRefresh('keys');
+
     try {
       await api.revokeKey(id);
-      toast('API key revoked');
-      fetchKeys();
+      fetchKeys(true);
     } catch (err: any) {
-      toast(err.message, 'error');
+      toast(err.message || 'Failed to revoke key', 'error');
+      fetchKeys(false);
     }
   };
 
@@ -291,7 +309,7 @@ export const ApiKeysPage: React.FC = () => {
 
       {/* Keys List */}
       <div className="table-card">
-        {loading ? (
+        {loading && keys.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
             Loading API keys...
           </div>

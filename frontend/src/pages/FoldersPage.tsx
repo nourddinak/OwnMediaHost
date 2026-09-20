@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { api, FolderItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
+import { useDataRefresh } from '../context/DataRefreshContext';
 import { Pagination } from '../components/common/Pagination';
 
 interface FoldersPageProps {
@@ -15,6 +16,7 @@ export const FoldersPage: React.FC<FoldersPageProps> = ({
   onSelectFolder,
 }) => {
   const { toast } = useToast();
+  const { refresh: globalRefresh } = useDataRefresh();
   const [newFolderName, setNewFolderName] = useState('');
   const [creating, setCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -29,6 +31,7 @@ export const FoldersPage: React.FC<FoldersPageProps> = ({
       toast(`Folder '${newFolderName}' created`);
       setNewFolderName('');
       setCreating(false);
+      globalRefresh('folders');
       onRefresh();
     } catch (err: any) {
       toast(err.message, 'error');
@@ -41,6 +44,7 @@ export const FoldersPage: React.FC<FoldersPageProps> = ({
       await api.updateFolder(id, { name: editName.trim() });
       toast('Folder updated');
       setEditingId(null);
+      globalRefresh('folders');
       onRefresh();
     } catch (err: any) {
       toast(err.message, 'error');
@@ -54,6 +58,7 @@ export const FoldersPage: React.FC<FoldersPageProps> = ({
     try {
       await api.deleteFolder(id);
       toast('Folder deleted');
+      globalRefresh('folders');
       onRefresh();
     } catch (err: any) {
       toast(err.message, 'error');

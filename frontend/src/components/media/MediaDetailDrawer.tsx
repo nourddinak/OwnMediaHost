@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { api, MediaItem } from '../../api/client';
 import { useToast } from '../../context/ToastContext';
+import { useDataRefresh } from '../../context/DataRefreshContext';
 import { copyTextToClipboard } from '../../utils/clipboard';
 import { formatBytes } from '../../utils/formatters';
 
@@ -57,14 +58,25 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
     }
   };
 
+  const { refresh: globalRefresh } = useDataRefresh();
+
   const handleToggleVisibility = async () => {
-    const newVis = media.visibility === 'public' ? 'private' : 'public';
+    const oldVis = media.visibility;
+    const newVis: 'public' | 'private' = oldVis === 'public' ? 'private' : 'public';
+
+    // Optimistically update immediately
+    const optimisticMedia = { ...media, visibility: newVis };
+    onUpdate(optimisticMedia);
+    toast(`Visibility updated to ${newVis}`);
+    globalRefresh('media');
+
     try {
       const updated = await api.updateFile(media.id, { visibility: newVis });
-      toast(`Visibility updated to ${newVis}`);
       onUpdate(updated);
     } catch (err: any) {
-      toast(err.message, 'error');
+      // Revert on failure
+      onUpdate({ ...media, visibility: oldVis });
+      toast(err.message || 'Failed to update visibility', 'error');
     }
   };
 
@@ -86,13 +98,17 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
     ) {
       return;
     }
+    // Optimistically close and remove immediately
+    onClose();
+    onDelete(media);
+    toast('Media and all related assets permanently purged!');
+    globalRefresh('media');
+
     try {
       await api.permanentDeleteFile(media.id);
-      toast('Media and all related assets permanently purged!');
-      onClose();
-      onUpdate();
     } catch (err: any) {
       toast(err.message || 'Failed to permanently delete media', 'error');
+      globalRefresh('media');
     }
   };
 
@@ -103,25 +119,39 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
       setNewTag('');
       return;
     }
-    const updatedTags = [...media.tags, cleanTag];
+    const oldTags = media.tags;
+    const updatedTags = [...oldTags, cleanTag];
+    setNewTag('');
+
+    // Optimistically apply tag immediately
+    onUpdate({ ...media, tags: updatedTags });
+    toast(`Tag '${cleanTag}' added`);
+    globalRefresh('media');
+
     try {
       const updated = await api.updateFile(media.id, { tags: updatedTags });
-      setNewTag('');
-      toast(`Tag '${cleanTag}' added`);
       onUpdate(updated);
     } catch (err: any) {
-      toast(err.message, 'error');
+      onUpdate({ ...media, tags: oldTags });
+      toast(err.message || 'Failed to add tag', 'error');
     }
   };
 
   const handleRemoveTag = async (tagToRemove: string) => {
+    const oldTags = media.tags;
     const updatedTags = media.tags.filter((t) => t !== tagToRemove);
+
+    // Optimistically remove tag immediately
+    onUpdate({ ...media, tags: updatedTags });
+    toast(`Tag '${tagToRemove}' removed`);
+    globalRefresh('media');
+
     try {
       const updated = await api.updateFile(media.id, { tags: updatedTags });
-      toast(`Tag '${tagToRemove}' removed`);
       onUpdate(updated);
     } catch (err: any) {
-      toast(err.message, 'error');
+      onUpdate({ ...media, tags: oldTags });
+      toast(err.message || 'Failed to remove tag', 'error');
     }
   };
 

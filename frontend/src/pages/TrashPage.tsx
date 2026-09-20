@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api, MediaItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
-import { useDataRefresh } from '../context/DataRefreshContext';
+import { useDataRefresh, useOnDataRefresh } from '../context/DataRefreshContext';
 import { Pagination } from '../components/common/Pagination';
 import { formatBytes } from '../utils/formatters';
 
@@ -16,27 +16,40 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkLoading, setBulkLoading] = useState(false);
 
-  const fetchTrash = useCallback(async (targetPage = page, targetPageSize = pageSize) => {
-    setLoading(true);
-    try {
-      const res = await api.listFiles({
-        trash: true,
-        limit: targetPageSize,
-        offset: (targetPage - 1) * targetPageSize,
-      });
-      setItems(res.items);
-      setTotal(res.total);
-      setSelected(new Set());
-    } catch (err: any) {
-      toast(err.message, 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize, toast]);
+  const fetchTrash = useCallback(
+    async (targetPage = page, targetPageSize = pageSize, isBackground = false) => {
+      if (!isBackground) {
+        setLoading(true);
+      }
+      try {
+        const res = await api.listFiles({
+          trash: true,
+          limit: targetPageSize,
+          offset: (targetPage - 1) * targetPageSize,
+        });
+        setItems(res.items);
+        setTotal(res.total);
+        // If current page became empty after deletes/restores, roll back to previous page
+        if (res.items.length === 0 && targetPage > 1 && res.total > 0) {
+          setPage((p) => Math.max(1, p - 1));
+        }
+      } catch (err: any) {
+        toast(err.message || 'Failed to load trash', 'error');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [page, pageSize, toast]
+  );
 
   useEffect(() => {
-    fetchTrash(page, pageSize);
+    fetchTrash(page, pageSize, false);
   }, [page, pageSize, fetchTrash]);
+
+  // Subscribe to real-time data bus events (e.g. file trashed in MediaPage or in another tab)
+  useOnDataRefresh(() => {
+    fetchTrash(page, pageSize, true);
+  });
 
   /** Optimistically remove items from the local list by IDs. */
   const optimisticRemove = (ids: Set<string> | string[]) => {
@@ -51,37 +64,46 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
   };
 
   const handleRestore = async (id: string, name: string) => {
-    // Optimistic: remove from list immediately
+    // Optimistic: remove from list immediately and update total
     optimisticRemove([id]);
     toast(`Restored '${name}'`);
+
+    // Notify all other components and tabs in real-time
+    globalRefresh('trash');
+    onDataChanged();
+
     try {
       await api.restoreFile(id);
+      // Quietly reconcile server state to backfill next items onto page without screen flicker
+      fetchTrash(page, pageSize, true);
     } catch (err: any) {
-      // Rollback on failure: re-fetch
-      toast(err.message, 'error');
-      fetchTrash(page, pageSize);
-      return;
+      toast(err.message || 'Failed to restore file', 'error');
+      fetchTrash(page, pageSize, false);
     }
-    globalRefresh();
-    onDataChanged();
   };
 
   const handlePermanentDelete = async (id: string, name: string) => {
-    if (!confirm(`Permanently delete '${name}'? This physically erases the file from disk and cannot be undone.`)) {
+    if (
+      !confirm(
+        `Permanently delete '${name}'? This physically erases the file from disk and cannot be undone.`
+      )
+    ) {
       return;
     }
     // Optimistic: remove from list immediately
     optimisticRemove([id]);
     toast(`Permanently deleted '${name}'`);
+
+    globalRefresh('trash');
+    onDataChanged();
+
     try {
       await api.permanentDeleteFile(id);
+      fetchTrash(page, pageSize, true);
     } catch (err: any) {
-      toast(err.message, 'error');
-      fetchTrash(page, pageSize);
-      return;
+      toast(err.message || 'Failed to permanently delete file', 'error');
+      fetchTrash(page, pageSize, false);
     }
-    globalRefresh();
-    onDataChanged();
   };
 
   const handleEmptyTrash = async () => {
@@ -89,6 +111,7 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
     if (!confirm(`Permanently erase all ${total} items from trash? This cannot be undone.`)) {
       return;
     }
+
     try {
       setBulkLoading(true);
       let allIds: string[] = [];
@@ -98,18 +121,22 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
         const allRes = await api.listFiles({ trash: true, limit: total, offset: 0 });
         allIds = allRes.items.map((i) => i.id);
       }
-      // Optimistic: clear everything
+
+      // Optimistic: clear immediately
       setItems([]);
       setTotal(0);
       setSelected(new Set());
       toast('Trash emptied');
+
+      globalRefresh('trash');
+      onDataChanged();
+
       await api.bulkOperation({ ids: allIds, action: 'permanent_delete' });
       setPage(1);
-      globalRefresh();
-      onDataChanged();
+      fetchTrash(1, pageSize, true);
     } catch (err: any) {
-      toast(err.message, 'error');
-      fetchTrash(1, pageSize);
+      toast(err.message || 'Failed to empty trash', 'error');
+      fetchTrash(1, pageSize, false);
     } finally {
       setBulkLoading(false);
     }
@@ -140,17 +167,22 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
     if (selected.size === 0) return;
     const count = selected.size;
     const ids = Array.from(selected);
+
     // Optimistic: remove immediately
     optimisticRemove(selected);
+    setSelected(new Set());
     toast(`Restored ${count} item${count > 1 ? 's' : ''}`);
+
+    globalRefresh('trash');
+    onDataChanged();
+
     try {
       setBulkLoading(true);
       await api.bulkOperation({ ids, action: 'restore' });
-      globalRefresh();
-      onDataChanged();
+      fetchTrash(page, pageSize, true);
     } catch (err: any) {
-      toast(err.message, 'error');
-      fetchTrash(page, pageSize);
+      toast(err.message || 'Bulk restore failed', 'error');
+      fetchTrash(page, pageSize, false);
     } finally {
       setBulkLoading(false);
     }
@@ -167,17 +199,22 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
       return;
     }
     const ids = Array.from(selected);
+
     // Optimistic: remove immediately
     optimisticRemove(selected);
+    setSelected(new Set());
     toast(`Permanently deleted ${count} item${count > 1 ? 's' : ''}`);
+
+    globalRefresh('trash');
+    onDataChanged();
+
     try {
       setBulkLoading(true);
       await api.bulkOperation({ ids, action: 'permanent_delete' });
-      globalRefresh();
-      onDataChanged();
+      fetchTrash(page, pageSize, true);
     } catch (err: any) {
-      toast(err.message, 'error');
-      fetchTrash(page, pageSize);
+      toast(err.message || 'Bulk delete failed', 'error');
+      fetchTrash(page, pageSize, false);
     } finally {
       setBulkLoading(false);
     }
@@ -260,7 +297,7 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
       )}
 
       <div className="table-card">
-        {loading ? (
+        {loading && items.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
             Loading trash...
           </div>

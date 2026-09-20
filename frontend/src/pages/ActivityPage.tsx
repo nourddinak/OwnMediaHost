@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { api, ApiLogItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
+import { useOnDataRefresh } from '../context/DataRefreshContext';
 import { Pagination } from '../components/common/Pagination';
 
 export const ActivityPage: React.FC = () => {
@@ -11,25 +12,45 @@ export const ActivityPage: React.FC = () => {
   const [pageSize, setPageSize] = useState(25);
   const [loading, setLoading] = useState(true);
 
-  const fetchLogs = useCallback(async (targetPage = page, targetPageSize = pageSize) => {
-    setLoading(true);
-    try {
-      const res = await api.getActivityLogs({
-        limit: targetPageSize,
-        offset: (targetPage - 1) * targetPageSize,
-      });
-      setLogs(res.items);
-      setTotal(res.total);
-    } catch (err: any) {
-      toast(err.message, 'error');
-    } finally {
-      setLoading(false);
-    }
-  }, [page, pageSize, toast]);
+  const fetchLogs = useCallback(
+    async (targetPage = page, targetPageSize = pageSize, isBackground = false) => {
+      if (!isBackground) {
+        setLoading(true);
+      }
+      try {
+        const res = await api.getActivityLogs({
+          limit: targetPageSize,
+          offset: (targetPage - 1) * targetPageSize,
+        });
+        setLogs(res.items);
+        setTotal(res.total);
+      } catch (err: any) {
+        toast(err.message || 'Failed to fetch activity logs', 'error');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [page, pageSize, toast]
+  );
 
   useEffect(() => {
-    fetchLogs(page, pageSize);
+    fetchLogs(page, pageSize, false);
   }, [page, pageSize, fetchLogs]);
+
+  // Subscribe to real-time events across tabs/pages
+  useOnDataRefresh(() => {
+    fetchLogs(page, pageSize, true);
+  });
+
+  // Gentle live activity polling while active
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        fetchLogs(page, pageSize, true);
+      }
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [fetchLogs, page, pageSize]);
 
   const handlePageChange = (newPage: number) => {
     setPage(newPage);
@@ -50,13 +71,13 @@ export const ActivityPage: React.FC = () => {
           </p>
         </div>
 
-        <button onClick={() => fetchLogs(page, pageSize)} className="btn btn-secondary press-scale">
+        <button onClick={() => fetchLogs(page, pageSize, false)} className="btn btn-secondary press-scale">
           ↻ Refresh
         </button>
       </div>
 
       <div className="table-card">
-        {loading ? (
+        {loading && logs.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
             Loading activity records...
           </div>

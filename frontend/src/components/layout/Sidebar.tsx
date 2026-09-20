@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { useOnDataRefresh } from '../../context/DataRefreshContext';
 import { api } from '../../api/client';
 
 export type PageView =
@@ -37,6 +38,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [statusUrl, setStatusUrl] = useState<string>('');
   const [healthStatus, setHealthStatus] = useState<'operational' | 'degraded' | 'offline'>('operational');
   const [hasUpdate, setHasUpdate] = useState(false);
+  const [trashCount, setTrashCount] = useState<number>(0);
+
+  const fetchTrashCount = useCallback(async () => {
+    try {
+      const res = await api.listFiles({ trash: true, limit: 1 });
+      setTrashCount(res.total);
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  useOnDataRefresh(() => {
+    fetchTrashCount();
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -78,12 +93,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
 
     checkHealthAndSettings();
+    fetchTrashCount();
     const interval = setInterval(checkHealthAndSettings, 60000);
     return () => {
       mounted = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [fetchTrashCount]);
 
   const navItems: { id: PageView; label: string; icon: React.ReactNode; badge?: string }[] = [
     {
@@ -184,6 +200,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     {
       id: 'trash',
       label: 'Trash',
+      badge: trashCount > 0 ? String(trashCount) : undefined,
       icon: (
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M3 6h18"/>

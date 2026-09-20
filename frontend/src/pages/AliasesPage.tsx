@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api, AliasItem, MediaItem } from '../api/client';
 import { useToast } from '../context/ToastContext';
+import { useDataRefresh, useOnDataRefresh } from '../context/DataRefreshContext';
 import { copyWithToast } from '../utils/clipboard';
 import { Pagination } from '../components/common/Pagination';
 import { MediaPickerModal } from '../components/media/MediaPickerModal';
@@ -8,6 +9,7 @@ import { formatBytes } from '../utils/formatters';
 
 export const AliasesPage: React.FC = () => {
   const { toast } = useToast();
+  const { refresh: globalRefresh } = useDataRefresh();
   const [aliases, setAliases] = useState<AliasItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
@@ -41,21 +43,28 @@ export const AliasesPage: React.FC = () => {
     });
   };
 
-  const fetchAliases = async () => {
-    setLoading(true);
+  const fetchAliases = useCallback(async (isBackground = false) => {
+    if (!isBackground) {
+      setLoading(true);
+    }
     try {
       const items = await api.listAliases();
       setAliases(items);
     } catch (err: any) {
-      toast(err.message, 'error');
+      toast(err.message || 'Failed to fetch aliases', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
-    fetchAliases();
-  }, []);
+    fetchAliases(false);
+  }, [fetchAliases]);
+
+  // Subscribe to real-time updates across all pages and tabs
+  useOnDataRefresh(() => {
+    fetchAliases(true);
+  });
 
   const handleCreate = async () => {
     const cleanPath = aliasPath.trim().replace(/^\/+|\/+$/g, '');
@@ -77,7 +86,8 @@ export const AliasesPage: React.FC = () => {
       setAliasPath('');
       setSelectedMedia(null);
       setCreating(false);
-      fetchAliases();
+      globalRefresh('aliases');
+      fetchAliases(true);
     } catch (err: any) {
       toast(err.message || 'Failed to create alias', 'error');
     }
@@ -89,7 +99,8 @@ export const AliasesPage: React.FC = () => {
       await api.updateAlias(reassigningAlias.id, { media_id: newMedia.id });
       toast(`Alias /a/${reassigningAlias.alias_path} updated to point to ${newMedia.filename}!`);
       setReassigningAlias(null);
-      fetchAliases();
+      globalRefresh('aliases');
+      fetchAliases(true);
     } catch (err: any) {
       toast(err.message || 'Failed to update alias target', 'error');
     }
@@ -97,12 +108,18 @@ export const AliasesPage: React.FC = () => {
 
   const handleDelete = async (id: string, path: string) => {
     if (!confirm(`Are you sure you want to delete alias /a/${path}? Any links using this URL will stop working.`)) return;
+
+    // Optimistic removal
+    setAliases((prev) => prev.filter((a) => a.id !== id));
+    toast(`Alias /a/${path} deleted`);
+    globalRefresh('aliases');
+
     try {
       await api.deleteAlias(id);
-      toast(`Alias /a/${path} deleted`);
-      fetchAliases();
+      fetchAliases(true);
     } catch (err: any) {
-      toast(err.message, 'error');
+      toast(err.message || 'Failed to delete alias', 'error');
+      fetchAliases(false);
     }
   };
 
@@ -428,7 +445,7 @@ export const AliasesPage: React.FC = () => {
 
       {/* Aliases Table */}
       <div className="table-card">
-        {loading ? (
+        {loading && aliases.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
             Loading vanity aliases...
           </div>

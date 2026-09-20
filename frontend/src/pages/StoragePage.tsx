@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { api, StorageStats } from '../api/client';
 import { useToast } from '../context/ToastContext';
+import { useOnDataRefresh } from '../context/DataRefreshContext';
 import { formatGB, formatMB } from '../utils/formatters';
 
 export const StoragePage: React.FC = () => {
@@ -8,21 +9,28 @@ export const StoragePage: React.FC = () => {
   const [stats, setStats] = useState<StorageStats | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const fetchStats = async () => {
-    setLoading(true);
+  const fetchStats = useCallback(async (isBackground = false) => {
+    if (!isBackground) {
+      setLoading(true);
+    }
     try {
       const data = await api.getStorageStats();
       setStats(data);
     } catch (err: any) {
-      toast(err.message, 'error');
+      toast(err.message || 'Failed to fetch storage stats', 'error');
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast]);
 
   useEffect(() => {
-    fetchStats();
-  }, []);
+    fetchStats(false);
+  }, [fetchStats]);
+
+  // Subscribe to real-time data events (upload, trash, restore, delete across all pages/tabs)
+  useOnDataRefresh(() => {
+    fetchStats(true);
+  });
 
   const diskUsedPercent =
     stats && stats.total_disk_bytes > 0
@@ -39,12 +47,12 @@ export const StoragePage: React.FC = () => {
           </p>
         </div>
 
-        <button onClick={fetchStats} className="btn btn-secondary press-scale">
+        <button onClick={() => fetchStats(false)} className="btn btn-secondary press-scale">
           ↻ Refresh Stats
         </button>
       </div>
 
-      {loading ? (
+      {loading && !stats ? (
         <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
           Reading host filesystem statistics...
         </div>
