@@ -1,24 +1,45 @@
 use axum::{
-    extract::State,
+    extract::{Query, State},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
+use tokio::sync::RwLock;
 use tracing::{info, warn};
 
 use crate::{
     auth::RequireAdmin,
     config::AppConfig,
+    database::DbPool,
     errors::AppError,
     models::ApiResponse,
 };
 
 #[derive(Clone)]
 pub struct SystemState {
+    pub pool: DbPool,
     pub config: Arc<AppConfig>,
+    pub update_cache: Arc<RwLock<Option<(Instant, UpdateCheckResponse)>>>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+pub struct UpdateCheckResponse {
+    pub has_update: bool,
+    pub release_ready: bool,
+    pub current_commit: String,
+    pub current_short_commit: String,
+    pub latest_commit: String,
+    pub latest_short_commit: String,
+    pub commit_message: String,
+    pub author: String,
+    pub published_at: String,
+    pub release_url: String,
+    pub release_tag: String,
+    pub checked_at: String,
 }
 
 #[derive(Serialize)]
@@ -28,11 +49,22 @@ pub struct UpdateStatusResponse {
     pub log: String,
 }
 
-pub fn router(config: Arc<AppConfig>) -> Router {
-    let state = SystemState { config };
+#[derive(Deserialize)]
+pub struct CheckQuery {
+    pub force: Option<bool>,
+}
+
+pub fn router(pool: DbPool, config: Arc<AppConfig>) -> Router {
+    let state = SystemState {
+        pool,
+        config,
+        update_cache: Arc::new(RwLock::new(None)),
+    };
     Router::new()
         .route("/trigger-update", post(trigger_update))
         .route("/update-status", get(get_update_status))
+        .route("/update-check", get(check_for_updates))
+        .route("/version", get(get_version_info))
         .with_state(state)
 }
 
@@ -52,6 +84,228 @@ fn get_log_path(config: &AppConfig) -> PathBuf {
     } else {
         config.media_root.join("update.log")
     }
+}
+
+async fn get_installed_commit(state: &SystemState) -> String {
+    // 1. Check SQLite settings
+    if let Ok(Some(commit)) = sqlx::query_scalar::<_, String>(
+        "SELECT value FROM settings WHERE key='installed_commit'"
+    )
+    .fetch_optional(&state.pool)
+    .await
+    {
+        if !commit.trim().is_empty() {
+            return commit.trim().to_string();
+        }
+    }
+
+    // 2. Check /etc/ownmediahost/version.json
+    for path in ["/etc/ownmediahost/version.json", "/var/lib/ownmediahost/storage/version.json"] {
+        if let Ok(content) = std::fs::read_to_string(path) {
+            if let Ok(json) = serde_json::from_str::<serde_json::Value>(&content) {
+                if let Some(c) = json.get("commit").and_then(|v| v.as_str()) {
+                    if !c.trim().is_empty() {
+                        return c.trim().to_string();
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Check environment variable
+    if let Ok(c) = std::env::var("COMMIT_HASH") {
+        if !c.trim().is_empty() {
+            return c.trim().to_string();
+        }
+    }
+
+    // 4. Default to repository latest known commit
+    "cb3f833d21a250846382273d06a6b0cab4bde0aa".to_string()
+}
+
+async fn get_version_info(
+    State(state): State<SystemState>,
+) -> Result<impl IntoResponse, AppError> {
+    let current_commit = get_installed_commit(&state).await;
+    let short_commit = if current_commit.len() >= 7 {
+        current_commit[..7].to_string()
+    } else {
+        current_commit.clone()
+    };
+
+    Ok(Json(ApiResponse::ok(serde_json::json!({
+        "app_name": "OwnMediaHost",
+        "version": env!("CARGO_PKG_VERSION"),
+        "commit": current_commit,
+        "short_commit": short_commit,
+    }))))
+}
+
+#[derive(Deserialize)]
+struct GitHubRelease {
+    tag_name: Option<String>,
+    html_url: Option<String>,
+    published_at: Option<String>,
+    body: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct GitHubCommitWrapper {
+    sha: String,
+    commit: GitHubCommitDetail,
+    author: Option<GitHubAuthor>,
+}
+
+#[derive(Deserialize)]
+struct GitHubCommitDetail {
+    message: String,
+}
+
+#[derive(Deserialize)]
+struct GitHubAuthor {
+    login: Option<String>,
+}
+
+async fn check_for_updates(
+    State(state): State<SystemState>,
+    Query(query): Query<CheckQuery>,
+    RequireAdmin(_admin): RequireAdmin,
+) -> Result<impl IntoResponse, AppError> {
+    let force = query.force.unwrap_or(false);
+
+    // 1. Check in-memory cache (60s TTL)
+    if !force {
+        let cache = state.update_cache.read().await;
+        if let Some((cached_at, ref res)) = *cache {
+            if cached_at.elapsed() < Duration::from_secs(60) {
+                return Ok(Json(ApiResponse::ok(res.clone())));
+            }
+        }
+    }
+
+    let current_commit = get_installed_commit(&state).await;
+    let current_short_commit = if current_commit.len() >= 7 {
+        current_commit[..7].to_string()
+    } else {
+        current_commit.clone()
+    };
+
+    let client = reqwest::Client::builder()
+        .timeout(Duration::from_secs(8))
+        .build()
+        .map_err(|e| AppError::Internal(format!("Failed to build HTTP client: {}", e)))?;
+
+    // 2. Fetch latest commit on main
+    let commit_req = client
+        .get("https://api.github.com/repos/nourddinak/OwnMediaHost/commits/main")
+        .header("User-Agent", "OwnMediaHost-Updater/0.1.0")
+        .header("Accept", "application/vnd.github.v3+json")
+        .send()
+        .await;
+
+    // 3. Fetch latest published release
+    let release_req = client
+        .get("https://api.github.com/repos/nourddinak/OwnMediaHost/releases/latest")
+        .header("User-Agent", "OwnMediaHost-Updater/0.1.0")
+        .header("Accept", "application/vnd.github.v3+json")
+        .send()
+        .await;
+
+    let mut latest_commit = current_commit.clone();
+    let mut commit_message = "No remote commit information".to_string();
+    let mut author = "nourddinak".to_string();
+
+    if let Ok(resp) = commit_req {
+        if resp.status().is_success() {
+            if let Ok(commit_data) = resp.json::<GitHubCommitWrapper>().await {
+                latest_commit = commit_data.sha;
+                commit_message = commit_data.commit.message.lines().next().unwrap_or("").to_string();
+                if let Some(auth) = commit_data.author {
+                    if let Some(l) = auth.login {
+                        author = l;
+                    }
+                }
+            }
+        }
+    }
+
+    let mut release_commit = String::new();
+    let mut release_url = "https://github.com/nourddinak/OwnMediaHost/releases/tag/latest".to_string();
+    let mut release_tag = "latest".to_string();
+    let mut published_at = chrono::Utc::now().to_rfc3339();
+
+    if let Ok(resp) = release_req {
+        if resp.status().is_success() {
+            if let Ok(rel_data) = resp.json::<GitHubRelease>().await {
+                if let Some(tag) = rel_data.tag_name {
+                    release_tag = tag;
+                }
+                if let Some(url) = rel_data.html_url {
+                    release_url = url;
+                }
+                if let Some(pub_at) = rel_data.published_at {
+                    published_at = pub_at;
+                }
+                if let Some(body) = rel_data.body {
+                    // Extract commit hash from release body: "- **Commit**: `([a-f0-9]+)`"
+                    for line in body.lines() {
+                        if line.contains("**Commit**") || line.contains("Commit:") {
+                            if let Some(idx) = line.find('`') {
+                                let rest = &line[idx + 1..];
+                                if let Some(end_idx) = rest.find('`') {
+                                    release_commit = rest[..end_idx].trim().to_string();
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let latest_short_commit = if latest_commit.len() >= 7 {
+        latest_commit[..7].to_string()
+    } else {
+        latest_commit.clone()
+    };
+
+    // A release is ready if the latest GitHub commit matches the latest release assets commit
+    let release_ready = !release_commit.is_empty() && (
+        release_commit == latest_commit || latest_commit.starts_with(&release_commit) || release_commit.starts_with(&latest_commit)
+    );
+
+    // Has update if latest commit differs from current installed commit
+    let has_update = !current_commit.is_empty() &&
+        !latest_commit.is_empty() &&
+        current_commit != latest_commit &&
+        !current_commit.starts_with(&latest_short_commit) &&
+        !latest_commit.starts_with(&current_short_commit);
+
+    let checked_at = chrono::Utc::now().to_rfc3339();
+
+    let response = UpdateCheckResponse {
+        has_update,
+        release_ready,
+        current_commit,
+        current_short_commit,
+        latest_commit,
+        latest_short_commit,
+        commit_message,
+        author,
+        published_at,
+        release_url,
+        release_tag,
+        checked_at,
+    };
+
+    // Save to cache
+    {
+        let mut cache = state.update_cache.write().await;
+        *cache = Some((Instant::now(), response.clone()));
+    }
+
+    Ok(Json(ApiResponse::ok(response)))
 }
 
 async fn trigger_update(

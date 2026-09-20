@@ -189,10 +189,25 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
   return json.data !== undefined ? json.data : (json as T);
 }
 
+export interface UpdateCheckResponse {
+  has_update: boolean;
+  release_ready: boolean;
+  current_commit: string;
+  current_short_commit: string;
+  latest_commit: string;
+  latest_short_commit: string;
+  commit_message: string;
+  author: string;
+  published_at: string;
+  release_url: string;
+  release_tag: string;
+  checked_at: string;
+}
+
 export const api = {
   // Auth
-  login: async (data: { email: string; password: string }) => {
-    const res = await request<{ user: { id: string; email: string }; token: string }>('/auth/login', {
+  login: async (data: { email: string; password?: string }) => {
+    const res = await request<{ user: { id: string; email: string; role: string }; token: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -212,26 +227,28 @@ export const api = {
 
   getMe: () => request<{ type: string; user?: { id: string; email: string } }>('/auth/me'),
 
-  // Files
+  // Media Files
   listFiles: (params: {
-    limit?: number;
-    offset?: number;
-    type?: string;
     folder_id?: string;
-    tag?: string;
+    type?: string;
+    media_type?: string;
     visibility?: string;
     search?: string;
+    tag?: string;
     sort?: string;
+    order?: string;
+    limit?: number;
+    offset?: number;
     trash?: boolean;
-  }) => {
+  } = {}) => {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => {
-      if (v !== undefined && v !== null && v !== '') {
-        qs.set(k, String(v));
-      }
+      if (v !== undefined && v !== null && v !== '') qs.set(k, String(v));
     });
     return request<PaginatedResult<MediaItem>>(`/files?${qs.toString()}`);
   },
+
+  getFile: (id: string) => request<MediaItem>(`/files/${id}`),
 
   uploadFile: (
     file: File,
@@ -239,29 +256,29 @@ export const api = {
       folder_id?: string;
       alias?: string;
       visibility?: string;
-      tags?: string[];
       duplicate_mode?: string;
+      tags?: string[];
       thumbnail?: Blob;
       width?: number;
       height?: number;
       duration?: number;
-      onProgress?: (percent: number) => void;
+      onProgress?: (pct: number) => void;
     } = {}
   ): Promise<MediaItem> => {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `${API_BASE}/files`);
       xhr.withCredentials = true;
+
       const token = getStoredToken();
       if (token) {
         xhr.setRequestHeader('Authorization', `Bearer ${token}`);
       }
 
-      if (opts.onProgress) {
+      if (opts.onProgress && xhr.upload) {
         xhr.upload.onprogress = (e) => {
           if (e.lengthComputable) {
-            const percent = Math.round((e.loaded / e.total) * 100);
-            opts.onProgress!(percent);
+            opts.onProgress!(Math.round((e.loaded / e.total) * 100));
           }
         };
       }
@@ -272,7 +289,7 @@ export const api = {
           if (xhr.status >= 200 && xhr.status < 300 && json.success) {
             resolve(json.data);
           } else {
-            reject(new Error(json.error?.message || 'Upload failed'));
+            reject(new Error(json.error?.message || `Upload failed with status ${xhr.status}`));
           }
         } catch {
           reject(new Error('Invalid response from server'));
@@ -337,6 +354,9 @@ export const api = {
     request<FolderItem>(`/folders/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteFolder: (id: string) => request(`/folders/${id}`, { method: 'DELETE' }),
 
+  // Tags
+  listTags: () => request<string[]>('/tags'),
+
   // Aliases
   listAliases: () => request<AliasItem[]>('/aliases'),
   createAlias: (data: { alias_path: string; media_id: string }) =>
@@ -362,6 +382,10 @@ export const api = {
     request('/settings', { method: 'PATCH', body: JSON.stringify({ settings }) }),
   triggerUpdate: () => request('/system/trigger-update', { method: 'POST' }),
   getUpdateStatus: () => request<{ running: boolean; success: boolean; log: string }>('/system/update-status'),
+  checkUpdate: (force = false) =>
+    request<UpdateCheckResponse>(`/system/update-check${force ? '?force=true' : ''}`),
+  getVersion: () =>
+    request<{ app_name: string; version: string; commit: string; short_commit: string }>('/system/version'),
   getHealth: async (): Promise<{ status: string }> => {
     try {
       const res = await fetch('/health', { cache: 'no-store' });

@@ -60,7 +60,7 @@ pub fn create_router(
         .nest("/activity", activity::router(pool.clone()))
         .nest("/settings", settings::router(pool.clone(), settings_cache))
         .nest("/aliases", aliases::crud_router(pool.clone(), storage.clone(), config.clone()))
-        .nest("/system", system::router(config.clone()));
+        .nest("/system", system::router(pool.clone(), config.clone()));
 
     let delivery_routes = delivery::router(pool.clone(), storage.clone(), config.clone());
     let alias_routes = aliases::delivery_router(pool.clone(), storage.clone(), config.clone());

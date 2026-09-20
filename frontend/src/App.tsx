@@ -11,6 +11,7 @@ import { StoragePage } from './pages/StoragePage';
 import { ActivityPage } from './pages/ActivityPage';
 import { TrashPage } from './pages/TrashPage';
 import { SettingsPage } from './pages/SettingsPage';
+import { UpdatesPage } from './pages/UpdatesPage';
 import { ApiDocsPage } from './pages/ApiDocsPage';
 import { LoginPage } from './pages/LoginPage';
 import { api, FolderItem } from './api/client';
@@ -126,6 +127,7 @@ export const App: React.FC = () => {
       case 'activity': return 'API Activity';
       case 'docs': return 'API Documentation';
       case 'trash': return 'Trash';
+      case 'updates': return 'Updates & System';
       case 'settings': return 'Platform Settings';
     }
   };
@@ -209,6 +211,7 @@ export const App: React.FC = () => {
           {currentView === 'activity' && <ActivityPage />}
           {currentView === 'docs' && <ApiDocsPage />}
           {currentView === 'trash' && <TrashPage onDataChanged={triggerRefresh} />}
+          {currentView === 'updates' && <UpdatesPage />}
           {currentView === 'settings' && <SettingsPage />}
         </main>
       </div>

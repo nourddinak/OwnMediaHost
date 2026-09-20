@@ -11,6 +11,7 @@ export type PageView =
   | 'keys'
   | 'storage'
   | 'activity'
+  | 'updates'
   | 'docs'
   | 'trash'
   | 'settings';
@@ -35,6 +36,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { user, logout } = useAuth();
   const [statusUrl, setStatusUrl] = useState<string>('');
   const [healthStatus, setHealthStatus] = useState<'operational' | 'degraded' | 'offline'>('operational');
+  const [hasUpdate, setHasUpdate] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -64,17 +66,26 @@ export const Sidebar: React.FC<SidebarProps> = ({
       } catch {
         // unconfigured
       }
+
+      try {
+        const update = await api.checkUpdate();
+        if (mounted && update) {
+          setHasUpdate(update.has_update);
+        }
+      } catch {
+        // offline or unconfigured
+      }
     };
 
     checkHealthAndSettings();
-    const interval = setInterval(checkHealthAndSettings, 45000);
+    const interval = setInterval(checkHealthAndSettings, 60000);
     return () => {
       mounted = false;
       clearInterval(interval);
     };
   }, []);
 
-  const navItems: { id: PageView; label: string; icon: React.ReactNode }[] = [
+  const navItems: { id: PageView; label: string; icon: React.ReactNode; badge?: string }[] = [
     {
       id: 'media',
       label: 'All Media',
@@ -178,6 +189,18 @@ export const Sidebar: React.FC<SidebarProps> = ({
           <path d="M3 6h18"/>
           <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
           <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
+        </svg>
+      ),
+    },
+    {
+      id: 'updates',
+      label: 'Updates',
+      badge: hasUpdate ? 'NEW' : undefined,
+      icon: (
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="12" cy="12" r="10"/>
+          <polyline points="16 12 12 8 8 12"/>
+          <line x1="12" y1="16" x2="12" y2="8"/>
         </svg>
       ),
     },
@@ -310,8 +333,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     whiteSpace: 'nowrap',
                   }}
                 >
-                  <span style={{ opacity: active ? 1 : 0.7, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item.icon}</span>
-                  {!isCollapsed && <span>{item.label}</span>}
+                  <span style={{ opacity: active ? 1 : 0.7, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                    {item.icon}
+                    {isCollapsed && item.badge && (
+                      <span
+                        style={{
+                          position: 'absolute',
+                          top: '-2px',
+                          right: '-2px',
+                          width: '7px',
+                          height: '7px',
+                          borderRadius: '50%',
+                          background: '#ff9f0a',
+                          boxShadow: '0 0 6px #ff9f0a',
+                        }}
+                      />
+                    )}
+                  </span>
+                  {!isCollapsed && <span style={{ flex: 1 }}>{item.label}</span>}
+                  {!isCollapsed && item.badge && (
+                    <span
+                      style={{
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        padding: '1px 6px',
+                        borderRadius: '8px',
+                        background: 'rgba(255, 159, 10, 0.2)',
+                        color: '#ff9f0a',
+                        border: '1px solid rgba(255, 159, 10, 0.4)',
+                      }}
+                    >
+                      {item.badge}
+                    </span>
+                  )}
                 </button>
               );
             })}

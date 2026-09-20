@@ -26,6 +26,7 @@ async-trait = "0.1"
 dotenvy = "0.15"
 sysinfo = "0.33"
 tokio-util = { version = "0.7", features = ["io"] }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 
 [dev-dependencies]
 tempfile = "3"

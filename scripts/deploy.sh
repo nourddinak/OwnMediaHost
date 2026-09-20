@@ -1167,6 +1167,25 @@ verify_deployment() {
         sqlite_ver="$("$sqlite_bin" --version 2>/dev/null | cut -d' ' -f1)"
         log_success "SQLite operational: ${sqlite_bin} (v${sqlite_ver})"
     fi
+
+    # Record active installed version
+    local current_git_commit
+    current_git_commit=$(cd "${REPO_DIR}" && git rev-parse HEAD 2>/dev/null || echo "")
+    if [ -n "$current_git_commit" ]; then
+        local db_file="${STORAGE_DIR}/database/media.db"
+        if [ -f "$db_file" ] && have sqlite3; then
+            as_root sqlite3 "$db_file" "INSERT OR REPLACE INTO settings (key, value) VALUES ('installed_commit', '${current_git_commit}');" 2>/dev/null || true
+            as_root sqlite3 "$db_file" "INSERT OR REPLACE INTO settings (key, value) VALUES ('installed_at', '$(date -u +"%Y-%m-%dT%H:%M:%SZ")');" 2>/dev/null || true
+        fi
+        cat << EOF | as_root tee /etc/ownmediahost/version.json >/dev/null
+{
+  "commit": "${current_git_commit}",
+  "short_commit": "${current_git_commit:0:7}",
+  "updated_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+}
+EOF
+        as_root chown ownmediahost:ownmediahost /etc/ownmediahost/version.json 2>/dev/null || true
+    fi
 }
 
 # --- Completion Display ---
