@@ -179,23 +179,21 @@ if [ -n "$CARGO_ENV" ] || have cargo; then
     HAS_CARGO=true
 fi
 
-# If precompiled requested or cargo not installed, try downloading release binary
-if [[ "$BUILD_FROM_SOURCE" != true ]] && [[ "$HAS_CARGO" != true || "$USE_PRECOMPILED" == true ]]; then
-    if curl -fsSL -o "$tmp_tar" "$release_backend_url" 2>/dev/null && [ -s "$tmp_tar" ]; then
-        tmp_extract="/tmp/ownmediahost-bin-extract"
-        as_root rm -rf "$tmp_extract"
-        as_root mkdir -p "$tmp_extract"
-        if as_root tar -xzf "$tmp_tar" -C "$tmp_extract" 2>/dev/null && [ -f "$tmp_extract/ownmediahost-backend" ]; then
-            as_root install -m 755 "$tmp_extract/ownmediahost-backend" /usr/local/bin/ownmediahost-backend
-            as_root rm -rf "$tmp_tar" "$tmp_extract"
-            log_success "Instant update: Precompiled backend binary installed to /usr/local/bin/ownmediahost-backend"
-            binary_updated=true
-        fi
+# Try downloading precompiled binary first (built automatically by GitHub Actions)
+if [[ "$BUILD_FROM_SOURCE" != true ]] && curl -fsSL -o "$tmp_tar" "$release_backend_url" 2>/dev/null && [ -s "$tmp_tar" ]; then
+    tmp_extract="/tmp/ownmediahost-bin-extract"
+    as_root rm -rf "$tmp_extract"
+    as_root mkdir -p "$tmp_extract"
+    if as_root tar -xzf "$tmp_tar" -C "$tmp_extract" 2>/dev/null && [ -f "$tmp_extract/ownmediahost-backend" ]; then
+        as_root install -m 755 "$tmp_extract/ownmediahost-backend" /usr/local/bin/ownmediahost-backend
+        as_root rm -rf "$tmp_tar" "$tmp_extract"
+        log_success "Instant update: Precompiled backend binary installed to /usr/local/bin/ownmediahost-backend"
+        binary_updated=true
     fi
 fi
 
 if [[ "$binary_updated" != true ]]; then
-    log_info "Compiling backend from source (${REPO_DIR}/backend)..."
+    log_info "Precompiled release binary not downloaded or --build-from-source requested. Compiling backend from source..."
 
     cd "${REPO_DIR}/backend"
     local_target_dir="/tmp/ownmediahost-cargo-target"
