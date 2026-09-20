@@ -254,23 +254,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </svg>
             </div>
             {!isCollapsed && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}>
-                <span style={{ fontSize: '15px', fontWeight: 600, letterSpacing: '-0.02em' }}>
-                  OwnMediaHost
-                </span>
-                <span
-                  style={{
-                    fontSize: '10px',
-                    fontWeight: 500,
-                    padding: '2px 5px',
-                    borderRadius: '4px',
-                    background: 'rgba(255,255,255,0.08)',
-                    color: 'var(--text-tertiary)',
-                  }}
-                >
-                  v1.0
-                </span>
-              </div>
+              <span style={{ fontSize: '15px', fontWeight: 600, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>
+                OwnMediaHost
+              </span>
             )}
           </div>
 
