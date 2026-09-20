@@ -806,33 +806,17 @@ EOF
     fi
 }
 
-# --- Deploy Decoupled Status Page ---
+# --- Deploy Out-of-Band Status Page Link ---
 setup_status_page() {
-    log_info "Deploying decoupled public status page assets..."
-    local status_target="/var/www/ownmediahost/status"
-    as_root mkdir -p "${status_target}"
-
-    if [ -d "${REPO_DIR}/status" ] && [ -f "${REPO_DIR}/status/index.html" ]; then
-        as_root rm -rf "${status_target:?}"/* 2>/dev/null || true
-        as_root cp -rf "${REPO_DIR}/status/"* "${status_target}/"
-        as_root chown -R www-data:www-data /var/www/ownmediahost/status 2>/dev/null || true
-        log_success "Decoupled status page assets deployed to ${status_target}"
-    elif [ -d "${status_target}/.git" ]; then
-        log_info "Existing status repository detected at ${status_target}. Pulling latest..."
-        (cd "${status_target}" && as_root git pull --ff-only 2>/dev/null || true)
-        as_root chown -R www-data:www-data /var/www/ownmediahost/status 2>/dev/null || true
-        log_success "Status page updated from Git repository"
-    elif have git && [ -n "${STATUS_DOMAIN}" ]; then
-        log_info "Cloning standalone status repository from ${STATUS_REPO_URL}..."
-        as_root git clone "${STATUS_REPO_URL}" "${status_target}" 2>/dev/null || true
-        as_root chown -R www-data:www-data /var/www/ownmediahost/status 2>/dev/null || true
-        log_success "Decoupled status repository cloned to ${status_target}"
+    local status_url="${STATUS_URL:-}"
+    if [ -z "$status_url" ] && [ -n "${STATUS_DOMAIN:-}" ]; then
+        status_url="https://${STATUS_DOMAIN}"
     fi
 
     # If an external or custom status URL was specified, connect it via connect-status.sh
-    if [ -n "${STATUS_URL}" ] && [ -f "${REPO_DIR}/scripts/connect-status.sh" ]; then
-        log_info "Connecting out-of-band status page (${STATUS_URL})..."
-        as_root bash "${REPO_DIR}/scripts/connect-status.sh" --url "${STATUS_URL}" 2>/dev/null || true
+    if [ -n "${status_url}" ] && [ -f "${REPO_DIR}/scripts/connect-status.sh" ]; then
+        log_info "Connecting out-of-band status page (${status_url})..."
+        as_root bash "${REPO_DIR}/scripts/connect-status.sh" --url "${status_url}" 2>/dev/null || true
     fi
 }
 
@@ -1045,6 +1029,7 @@ configure_caddy() {
 
     # Remove any previous blocks cleanly
     as_root sed -i '/# =* OwnMediaHost =*/,/# =* End OwnMediaHost =*/d' "$caddyfile"
+    as_root sed -i '/# =* Status Page =*/,/# =* End Status Page =*/d' "$caddyfile"
     as_root sed -i '/# >>> OwnMediaHost block >>>/,/# <<< OwnMediaHost block <<</d' "$caddyfile"
     as_root sed -i '/# >>> SELFmedia block >>>/,/# <<< SELFmedia block <<</d' "$caddyfile"
 
@@ -1069,14 +1054,7 @@ ${DOMAIN} {
         }
     }
 
-    # 2. Decoupled Static Status Dashboard
-    handle_path /status* {
-        root * /var/www/ownmediahost/status
-        file_server
-        try_files {path} /index.html
-    }
-
-    # 3. Static React SPA Dashboard (served only for non-backend frontend routes)
+    # 2. Static React SPA Dashboard (served only for non-backend frontend routes)
     handle {
         root * /var/www/ownmediahost/dist
         try_files {path} /index.html
@@ -1095,6 +1073,9 @@ EOF
 # ==============================================================================
 ${FRONTEND_DOMAIN} {
     encode gzip zstd
+    request_body {
+        max_size 10GB
+    }
 
     # Direct/fallback reverse proxy for media & API on frontend domain
     @backend path /api* /f/* /i/* /a/* /thumbnails/* /private/* /health*
@@ -1104,16 +1085,11 @@ ${FRONTEND_DOMAIN} {
         }
     }
 
-    # Decoupled Static Status Dashboard
-    handle_path /status* {
-        root * /var/www/ownmediahost/status
-        file_server
+    handle {
+        root * /var/www/ownmediahost/dist
         try_files {path} /index.html
+        file_server
     }
-
-    root * /var/www/ownmediahost/dist
-    try_files {path} /index.html
-    file_server
 }
 
 ${BACKEND_DOMAIN} {
@@ -1139,26 +1115,6 @@ ${BACKEND_DOMAIN} {
 # ============================ End OwnMediaHost ================================
 EOF
 )
-    fi
-
-    if [[ -n "$STATUS_DOMAIN" ]]; then
-        local status_block
-        status_block=$(cat << EOF
-
-
-# ============================== Status Page ===================================
-# ${STATUS_DOMAIN}   {static status}
-# ==============================================================================
-${STATUS_DOMAIN} {
-    encode gzip zstd
-    root * /var/www/ownmediahost/status
-    file_server
-    try_files {path} /index.html
-}
-# ============================ End Status Page =================================
-EOF
-)
-        caddy_block="${caddy_block}${status_block}"
     fi
 
     echo "$caddy_block" | as_root tee -a "$caddyfile" >/dev/null

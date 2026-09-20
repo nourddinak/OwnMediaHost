@@ -422,31 +422,14 @@ EOF
     log_success "Frontend assets refreshed (production build)."
 fi
 
-# 2b. Synchronize Public Status Page Assets
-if [ -d "${REPO_DIR}/status" ] && [ -f "${REPO_DIR}/status/index.html" ]; then
-    log_info "Synchronizing public status page assets from local files..."
-    as_root mkdir -p /var/www/ownmediahost/status
-    as_root rm -rf /var/www/ownmediahost/status/* 2>/dev/null || true
-    as_root cp -rf "${REPO_DIR}/status/"* /var/www/ownmediahost/status/
-    as_root chown -R www-data:www-data /var/www/ownmediahost/status 2>/dev/null || true
-    log_success "Public status page assets refreshed."
-elif [ -d "/var/www/ownmediahost/status/.git" ]; then
-    log_info "Synchronizing public status page from Git repository..."
-    (cd /var/www/ownmediahost/status && as_root git pull --ff-only 2>/dev/null || true)
-    as_root chown -R www-data:www-data /var/www/ownmediahost/status 2>/dev/null || true
-    log_success "Public status page Git repository updated."
-elif [ -n "$STATUS_DOMAIN" ] && have git; then
-    log_info "Cloning public status page repository..."
-    as_root mkdir -p /var/www/ownmediahost/status
-    as_root git clone "https://github.com/nourddinak/OwnMediaHost-status.git" /var/www/ownmediahost/status 2>/dev/null || true
-    as_root chown -R www-data:www-data /var/www/ownmediahost/status 2>/dev/null || true
-    log_success "Public status page repository initialized."
-fi
-
 # Connect status URL if explicitly provided
-if [ -n "$STATUS_URL_CLI" ] && [ -f "${REPO_DIR}/scripts/connect-status.sh" ]; then
-    log_info "Updating public status page connection (${STATUS_URL_CLI})..."
-    as_root bash "${REPO_DIR}/scripts/connect-status.sh" --url "$STATUS_URL_CLI" 2>/dev/null || true
+status_url_sync="${STATUS_URL_CLI:-}"
+if [ -z "$status_url_sync" ] && [ -n "${STATUS_DOMAIN_CLI:-}" ]; then
+    status_url_sync="https://${STATUS_DOMAIN_CLI}"
+fi
+if [ -n "$status_url_sync" ] && [ -f "${REPO_DIR}/scripts/connect-status.sh" ]; then
+    log_info "Updating public status page connection (${status_url_sync})..."
+    as_root bash "${REPO_DIR}/scripts/connect-status.sh" --url "$status_url_sync" 2>/dev/null || true
 fi
 
 # 3. Verify Database CLI & Media Engine
@@ -470,6 +453,7 @@ if [ -f /etc/caddy/Caddyfile ] && [ -f "$ENV_ACTIVE" ]; then
     [ -z "$caddy_port" ] && caddy_port="5002"
 
     as_root sed -i '/# =* OwnMediaHost =*/,/# =* End OwnMediaHost =*/d' /etc/caddy/Caddyfile
+    as_root sed -i '/# =* Status Page =*/,/# =* End Status Page =*/d' /etc/caddy/Caddyfile
     as_root sed -i '/# >>> OwnMediaHost block >>>/,/# <<< OwnMediaHost block <<</d' /etc/caddy/Caddyfile
     as_root sed -i '/# >>> SELFmedia block >>>/,/# <<< SELFmedia block <<</d' /etc/caddy/Caddyfile
 
@@ -482,6 +466,9 @@ if [ -f /etc/caddy/Caddyfile ] && [ -f "$ENV_ACTIVE" ]; then
 # ==============================================================================
 ${FRONTEND_DOMAIN} {
     encode gzip zstd
+    request_body {
+        max_size 10GB
+    }
 
     # Direct/fallback reverse proxy for media & API on frontend domain
     @backend path /api* /f/* /i/* /a/* /thumbnails/* /private/* /health*
@@ -491,15 +478,11 @@ ${FRONTEND_DOMAIN} {
         }
     }
 
-    handle_path /status* {
-        root * /var/www/ownmediahost/status
-        file_server
+    handle {
+        root * /var/www/ownmediahost/dist
         try_files {path} /index.html
+        file_server
     }
-
-    root * /var/www/ownmediahost/dist
-    try_files {path} /index.html
-    file_server
 }
 
 ${BACKEND_DOMAIN} {
@@ -544,12 +527,6 @@ ${caddy_domain} {
         }
     }
 
-    handle_path /status* {
-        root * /var/www/ownmediahost/status
-        file_server
-        try_files {path} /index.html
-    }
-
     handle {
         root * /var/www/ownmediahost/dist
         try_files {path} /index.html
@@ -559,23 +536,6 @@ ${caddy_domain} {
 # ============================ End OwnMediaHost ================================
 EOF
         log_info "Synchronized unified domain Caddy routing (${caddy_domain})."
-    fi
-
-    if [ -n "$STATUS_DOMAIN" ]; then
-        cat << EOF | as_root tee -a /etc/caddy/Caddyfile >/dev/null
-
-# ============================== Status Page ===================================
-# ${STATUS_DOMAIN}   {static status}
-# ==============================================================================
-${STATUS_DOMAIN} {
-    encode gzip zstd
-    root * /var/www/ownmediahost/status
-    file_server
-    try_files {path} /index.html
-}
-# ============================ End Status Page =================================
-EOF
-        log_info "Synchronized decoupled status page Caddy routing (${STATUS_DOMAIN})."
     fi
 
     if as_root caddy validate --config /etc/caddy/Caddyfile >/dev/null 2>&1; then

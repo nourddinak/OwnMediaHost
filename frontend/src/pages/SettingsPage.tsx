@@ -640,21 +640,23 @@ export const SettingsPage: React.FC = () => {
                 </span>
               )}
             </div>
-            <a
-              href={settings['status_page_url'] || '/status/'}
-              target="_blank"
-              rel="noopener noreferrer"
-              style={{
-                fontSize: '12px',
-                color: 'var(--color-primary, #6366f1)',
-                textDecoration: 'none',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '4px',
-              }}
-            >
-              Open Status Page ↗
-            </a>
+            {settings['status_page_url'] && (
+              <a
+                href={settings['status_page_url']}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--color-primary, #6366f1)',
+                  textDecoration: 'none',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                }}
+              >
+                Open Status Page ↗
+              </a>
+            )}
           </div>
           <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', lineHeight: 1.5 }}>
             Configure your custom status page URL (e.g. <code>https://status.yourdomain.com</code> via DNS CNAME to <code>statuspage.betteruptime.com</code>, or your hosted Better Stack URL). Survives total VPS downtime and records outages to the second.

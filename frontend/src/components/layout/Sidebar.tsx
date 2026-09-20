@@ -33,7 +33,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleCollapse,
 }) => {
   const { user, logout } = useAuth();
-  const [statusUrl, setStatusUrl] = useState<string>('/status/');
+  const [statusUrl, setStatusUrl] = useState<string>('');
   const [healthStatus, setHealthStatus] = useState<'operational' | 'degraded' | 'offline'>('operational');
 
   useEffect(() => {
@@ -58,9 +58,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         const settings = await api.getSettings();
         if (mounted && settings && settings.status_page_url) {
           setStatusUrl(settings.status_page_url.trim());
+        } else if (mounted) {
+          setStatusUrl('');
         }
       } catch {
-        // use default /status/
+        // unconfigured
       }
     };
 
@@ -331,65 +333,116 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           {/* Out-of-Band System Status Link */}
           <div style={{ padding: isCollapsed ? '12px 0 6px' : '6px 12px 10px', display: 'flex', justifyContent: 'center' }}>
-            <a
-              href={statusUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="press-scale"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: isCollapsed ? 'center' : 'flex-start',
-                gap: isCollapsed ? 0 : '8px',
-                width: isCollapsed ? '38px' : '100%',
-                height: isCollapsed ? '38px' : 'auto',
-                padding: isCollapsed ? 0 : '6px 10px',
-                borderRadius: isCollapsed ? '8px' : 'var(--radius-sm)',
-                fontSize: '12px',
-                color: 'var(--text-tertiary)',
-                textDecoration: 'none',
-                border: '1px dashed var(--border-subtle)',
-                transition: 'all 120ms ease',
-              }}
-              title={
-                healthStatus === 'operational'
-                  ? 'Status: Operational — click to view 24/7 public status'
-                  : 'Status: Degraded / Offline — click to view 24/7 public status'
-              }
-            >
-              <span
+            {statusUrl ? (
+              <a
+                href={statusUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="press-scale"
                 style={{
-                  width: '6px',
-                  height: '6px',
-                  minWidth: '6px',
-                  borderRadius: '50%',
-                  background:
-                    healthStatus === 'operational'
-                      ? '#2ea043'
-                      : healthStatus === 'degraded'
-                      ? '#d29922'
-                      : '#f85149',
-                  boxShadow:
-                    healthStatus === 'operational'
-                      ? '0 0 6px rgba(46, 160, 67, 0.4)'
-                      : healthStatus === 'degraded'
-                      ? '0 0 6px rgba(210, 153, 34, 0.4)'
-                      : '0 0 6px rgba(248, 81, 73, 0.4)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: isCollapsed ? 'center' : 'flex-start',
+                  gap: isCollapsed ? 0 : '8px',
+                  width: isCollapsed ? '38px' : '100%',
+                  height: isCollapsed ? '38px' : 'auto',
+                  padding: isCollapsed ? 0 : '6px 10px',
+                  borderRadius: isCollapsed ? '8px' : 'var(--radius-sm)',
+                  fontSize: '12px',
+                  color: 'var(--text-tertiary)',
+                  textDecoration: 'none',
+                  border: '1px dashed var(--border-subtle)',
+                  transition: 'all 120ms ease',
                 }}
-              />
-              {!isCollapsed && (
-                <>
+                title={
+                  healthStatus === 'operational'
+                    ? 'Status: Operational — click to view 24/7 public status'
+                    : 'Status: Degraded / Offline — click to view 24/7 public status'
+                }
+              >
+                <span
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    minWidth: '6px',
+                    borderRadius: '50%',
+                    background:
+                      healthStatus === 'operational'
+                        ? '#2ea043'
+                        : healthStatus === 'degraded'
+                        ? '#d29922'
+                        : '#f85149',
+                    boxShadow:
+                      healthStatus === 'operational'
+                        ? '0 0 6px rgba(46, 160, 67, 0.4)'
+                        : healthStatus === 'degraded'
+                        ? '0 0 6px rgba(210, 153, 34, 0.4)'
+                        : '0 0 6px rgba(248, 81, 73, 0.4)',
+                  }}
+                />
+                {!isCollapsed && (
+                  <>
+                    <span style={{ color: healthStatus === 'operational' ? 'var(--text-secondary)' : '#f85149', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {healthStatus === 'operational' ? 'Status: Operational' : healthStatus === 'degraded' ? 'Status: Degraded' : 'Status: Offline'}
+                    </span>
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto', opacity: 0.6 }}>
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                      <polyline points="15 3 21 3 21 9"/>
+                      <line x1="10" y1="14" x2="21" y2="3"/>
+                    </svg>
+                  </>
+                )}
+              </a>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onSelectView('settings')}
+                className="press-scale"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: isCollapsed ? 'center' : 'flex-start',
+                  gap: isCollapsed ? 0 : '8px',
+                  width: isCollapsed ? '38px' : '100%',
+                  height: isCollapsed ? '38px' : 'auto',
+                  padding: isCollapsed ? 0 : '6px 10px',
+                  borderRadius: isCollapsed ? '8px' : 'var(--radius-sm)',
+                  fontSize: '12px',
+                  color: 'var(--text-tertiary)',
+                  background: 'transparent',
+                  border: '1px dashed var(--border-subtle)',
+                  cursor: 'pointer',
+                  transition: 'all 120ms ease',
+                }}
+                title="Status: Operational — Click to configure status page in Settings"
+              >
+                <span
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    minWidth: '6px',
+                    borderRadius: '50%',
+                    background:
+                      healthStatus === 'operational'
+                        ? '#2ea043'
+                        : healthStatus === 'degraded'
+                        ? '#d29922'
+                        : '#f85149',
+                    boxShadow:
+                      healthStatus === 'operational'
+                        ? '0 0 6px rgba(46, 160, 67, 0.4)'
+                        : healthStatus === 'degraded'
+                        ? '0 0 6px rgba(210, 153, 34, 0.4)'
+                        : '0 0 6px rgba(248, 81, 73, 0.4)',
+                  }}
+                />
+                {!isCollapsed && (
                   <span style={{ color: healthStatus === 'operational' ? 'var(--text-secondary)' : '#f85149', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {healthStatus === 'operational' ? 'Status: Operational' : healthStatus === 'degraded' ? 'Status: Degraded' : 'Status: Offline'}
                   </span>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: 'auto', opacity: 0.6 }}>
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                    <polyline points="15 3 21 3 21 9"/>
-                    <line x1="10" y1="14" x2="21" y2="3"/>
-                  </svg>
-                </>
-              )}
-            </a>
+                )}
+              </button>
+            )}
           </div>
         </div>
 
