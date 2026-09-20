@@ -65,11 +65,11 @@ export const FoldersPage: React.FC<FoldersPageProps> = ({
   const paginatedFolders = folders.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '800px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600 }}>Folders</h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+    <div className="page-container" style={{ maxWidth: '900px' }}>
+      <div className="page-header-row">
+        <div className="page-title-group">
+          <h1 className="page-main-title">Folders</h1>
+          <p className="page-subtitle">
             Organize media assets into logical directories and categories.
           </p>
         </div>
@@ -86,12 +86,13 @@ export const FoldersPage: React.FC<FoldersPageProps> = ({
         <div
           style={{
             background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-medium)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '14px',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: 'var(--radius-md)',
+            padding: '16px',
             display: 'flex',
             gap: '10px',
             alignItems: 'center',
+            flexWrap: 'wrap',
           }}
         >
           <input
@@ -102,33 +103,28 @@ export const FoldersPage: React.FC<FoldersPageProps> = ({
             onKeyDown={(e) => e.key === 'Enter' && handleCreate()}
             autoFocus
             style={{
-              flex: 1,
+              flex: '1 1 220px',
               background: 'var(--bg-tertiary)',
               border: '1px solid var(--border-subtle)',
-              borderRadius: '4px',
-              padding: '6px 10px',
+              borderRadius: '6px',
+              padding: '8px 12px',
               color: '#fff',
               fontSize: '13px',
             }}
           />
-          <button onClick={handleCreate} className="btn btn-primary press-scale">
-            Create
-          </button>
-          <button onClick={() => setCreating(false)} className="btn btn-secondary press-scale">
-            Cancel
-          </button>
+          <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
+            <button onClick={handleCreate} className="btn btn-primary press-scale">
+              Create
+            </button>
+            <button onClick={() => setCreating(false)} className="btn btn-secondary press-scale">
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 
       {/* Folders List */}
-      <div
-        style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-md)',
-          overflow: 'hidden',
-        }}
-      >
+      <div className="table-card">
         {folders.length === 0 ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
             No folders created yet. Click "+ New Folder" to get started.
@@ -145,14 +141,16 @@ export const FoldersPage: React.FC<FoldersPageProps> = ({
                     alignItems: 'center',
                     justifyContent: 'space-between',
                     padding: '12px 18px',
-                    borderBottom: '1px solid var(--border-subtle)',
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.06)',
+                    flexWrap: 'wrap',
+                    gap: '10px',
                   }}
                 >
                   <div
-                    style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', flex: 1 }}
+                    style={{ display: 'flex', alignItems: 'center', gap: '12px', cursor: 'pointer', flex: '1 1 200px', minWidth: 0 }}
                     onClick={() => onSelectFolder(f.id)}
                   >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" strokeWidth="2" style={{ flexShrink: 0 }}>
                       <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
                     </svg>
 
@@ -170,20 +168,21 @@ export const FoldersPage: React.FC<FoldersPageProps> = ({
                           padding: '4px 8px',
                           color: '#fff',
                           fontSize: '13px',
+                          maxWidth: '240px',
                         }}
                       />
                     ) : (
-                      <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)' }}>
+                      <span style={{ fontSize: '14px', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                         {f.name}
                       </span>
                     )}
 
-                    <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                    <span style={{ fontSize: '12px', color: 'var(--text-tertiary)', flexShrink: 0 }}>
                       ({f.media_count} {f.media_count === 1 ? 'file' : 'files'})
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', gap: '8px' }}>
+                  <div style={{ display: 'flex', gap: '8px', flexShrink: 0 }}>
                     {isEditing ? (
                       <>
                         <button
@@ -248,3 +247,4 @@ export const FoldersPage: React.FC<FoldersPageProps> = ({
     </div>
   );
 };
+

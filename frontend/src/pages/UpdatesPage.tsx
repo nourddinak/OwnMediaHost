@@ -159,14 +159,14 @@ export const UpdatesPage: React.FC = () => {
   const isCiBuilding = Boolean(updateInfo?.is_building || (!updateInfo?.release_ready && updateInfo?.latest_commit !== updateInfo?.current_commit));
 
   return (
-    <div className="updates-container">
+    <div className="page-container">
       {/* Header Row */}
-      <div className="updates-header">
-        <div className="updates-title-group">
-          <h1 className="updates-main-title">
+      <div className="page-header-row">
+        <div className="page-title-group">
+          <h1 className="page-main-title">
             Updates & System Notifications
           </h1>
-          <p className="updates-subtitle">
+          <p className="page-subtitle">
             Track remote releases from GitHub and manage automated 1-click server updates.
           </p>
         </div>
@@ -730,38 +730,6 @@ export const UpdatesPage: React.FC = () => {
 
       {/* Clean Apple Obsidian Styles - Zero Neon */}
       <style>{`
-        .updates-container {
-          max-width: 960px;
-          margin: 0 auto;
-          padding: 24px 20px 80px 20px;
-        }
-
-        .updates-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 16px;
-          margin-bottom: 24px;
-        }
-
-        .updates-title-group {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .updates-main-title {
-          font-size: 22px;
-          font-weight: 600;
-          letter-spacing: -0.02em;
-          margin: 0;
-          color: var(--text-primary);
-        }
-
-        .updates-subtitle {
-          color: var(--text-secondary);
-          font-size: 13px;
-          margin: 4px 0 0;
-        }
 
         .updates-check-btn {
           display: flex;
@@ -1312,24 +1280,6 @@ export const UpdatesPage: React.FC = () => {
 
         /* Mobile Adjustments (max-width: 640px) */
         @media (max-width: 640px) {
-          .updates-container {
-            padding: 16px 12px 90px 12px;
-          }
-
-          .updates-header {
-            flex-direction: column;
-            align-items: stretch;
-            gap: 12px;
-            margin-bottom: 16px;
-          }
-
-          .updates-main-title {
-            font-size: 18px;
-          }
-
-          .updates-subtitle {
-            font-size: 12px;
-          }
 
           .updates-check-btn {
             width: 100%;

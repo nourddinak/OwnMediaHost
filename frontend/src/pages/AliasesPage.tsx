@@ -71,11 +71,11 @@ export const AliasesPage: React.FC = () => {
   const paginatedAliases = aliases.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '900px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600 }}>Vanity Aliases</h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+    <div className="page-container" style={{ maxWidth: '920px' }}>
+      <div className="page-header-row">
+        <div className="page-title-group">
+          <h1 className="page-main-title">Vanity Aliases</h1>
+          <p className="page-subtitle">
             Permanent, human-readable URLs that remain stable even when replacing the underlying image.
           </p>
         </div>
@@ -89,18 +89,18 @@ export const AliasesPage: React.FC = () => {
         <div
           style={{
             background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-medium)',
-            borderRadius: 'var(--radius-sm)',
-            padding: '16px',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: 'var(--radius-md)',
+            padding: '18px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '12px',
+            gap: '14px',
           }}
         >
-          <div style={{ fontSize: '13px', fontWeight: 600 }}>Create New Vanity Alias</div>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+          <div style={{ fontSize: '14px', fontWeight: 600 }}>Create New Vanity Alias</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '12px' }}>
             <div>
-              <label style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+              <label style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', marginBottom: '4px' }}>
                 Alias Path (e.g. profile/avatar or brand/logo)
               </label>
               <input
@@ -112,16 +112,15 @@ export const AliasesPage: React.FC = () => {
                   width: '100%',
                   background: 'var(--bg-tertiary)',
                   border: '1px solid var(--border-subtle)',
-                  borderRadius: '4px',
-                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  padding: '8px 12px',
                   color: '#fff',
                   fontSize: '13px',
-                  marginTop: '4px',
                 }}
               />
             </div>
             <div>
-              <label style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>
+              <label style={{ fontSize: '11px', color: 'var(--text-tertiary)', display: 'block', marginBottom: '4px' }}>
                 Target Media ID or Public ID
               </label>
               <input
@@ -133,11 +132,10 @@ export const AliasesPage: React.FC = () => {
                   width: '100%',
                   background: 'var(--bg-tertiary)',
                   border: '1px solid var(--border-subtle)',
-                  borderRadius: '4px',
-                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  padding: '8px 12px',
                   color: '#fff',
                   fontSize: '13px',
-                  marginTop: '4px',
                 }}
               />
             </div>
@@ -155,14 +153,7 @@ export const AliasesPage: React.FC = () => {
       )}
 
       {/* Aliases Table */}
-      <div
-        style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-md)',
-          overflow: 'hidden',
-        }}
-      >
+      <div className="table-card">
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
             Loading aliases...
@@ -172,49 +163,51 @@ export const AliasesPage: React.FC = () => {
             No aliases created yet. Click "+ Create Alias" to map stable vanity URLs.
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)' }}>
-                <th style={{ padding: '12px 18px' }}>Alias Path</th>
-                <th style={{ padding: '12px 18px' }}>Target File</th>
-                <th style={{ padding: '12px 18px' }}>Target ID</th>
-                <th style={{ padding: '12px 18px', textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedAliases.map((a) => (
-                <tr key={a.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                  <td style={{ padding: '12px 18px', fontWeight: 600, color: 'var(--accent-blue)' }}>
-                    /a/{a.alias_path}
-                  </td>
-                  <td style={{ padding: '12px 18px', color: 'var(--text-primary)' }}>
-                    {a.media_filename}
-                  </td>
-                  <td style={{ padding: '12px 18px', fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-tertiary)' }}>
-                    {a.media_public_id}
-                  </td>
-                  <td style={{ padding: '12px 18px', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
-                      <button
-                        onClick={() => copyUrl(a.alias_path)}
-                        className="btn btn-secondary press-scale"
-                        style={{ padding: '4px 8px', fontSize: '11px' }}
-                      >
-                        Copy URL
-                      </button>
-                      <button
-                        onClick={() => handleDelete(a.id, a.alias_path)}
-                        className="btn btn-ghost press-scale"
-                        style={{ padding: '4px 8px', fontSize: '11px', color: 'var(--accent-red)' }}
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
+          <div className="table-responsive-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Alias Path</th>
+                  <th>Target File</th>
+                  <th>Target ID</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {paginatedAliases.map((a) => (
+                  <tr key={a.id}>
+                    <td style={{ fontWeight: 600, color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>
+                      /a/{a.alias_path}
+                    </td>
+                    <td style={{ color: 'var(--text-primary)' }}>
+                      {a.media_filename}
+                    </td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                      {a.media_public_id}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => copyUrl(a.alias_path)}
+                          className="btn btn-secondary press-scale"
+                          style={{ padding: '4px 8px', fontSize: '11px' }}
+                        >
+                          Copy URL
+                        </button>
+                        <button
+                          onClick={() => handleDelete(a.id, a.alias_path)}
+                          className="btn btn-ghost press-scale"
+                          style={{ padding: '4px 8px', fontSize: '11px', color: 'var(--accent-red)' }}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {aliases.length > 0 && (
@@ -236,3 +229,4 @@ export const AliasesPage: React.FC = () => {
     </div>
   );
 };
+

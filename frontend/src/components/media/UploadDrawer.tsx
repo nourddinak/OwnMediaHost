@@ -202,7 +202,7 @@ export const UploadDrawer: React.FC<UploadDrawerProps> = ({
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
               gap: '12px',
               background: 'rgba(255,255,255,0.02)',
               border: '1px solid var(--border-subtle)',

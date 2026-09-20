@@ -222,10 +222,12 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
                 <span
                   style={{
                     fontSize: '11px',
-                    color: '#ffb74d',
-                    background: 'rgba(255, 183, 77, 0.15)',
-                    padding: '2px 6px',
+                    color: 'var(--text-secondary)',
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    padding: '2px 8px',
                     borderRadius: '4px',
+                    fontWeight: 500,
                   }}
                 >
                   🔒 Private File
@@ -280,7 +282,7 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
           </div>
 
           {/* Action Buttons Row */}
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
             <button
               onClick={() => handleCopy(permanentUrl, 'perm-btn', permanentInputRef)}
               className="btn btn-primary press-scale"
@@ -308,27 +310,25 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
               Signed URL
             </button>
 
-            <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
-              <button
-                onClick={() => onDelete(media)}
-                className="btn btn-secondary press-scale"
-                title="Move to trash (recoverable for 30 days)"
-              >
-                Move to Trash
-              </button>
-              <button
-                onClick={handlePermanentPurge}
-                className="btn btn-danger press-scale"
-                style={{
-                  background: 'rgba(239, 68, 68, 0.15)',
-                  color: '#ef4444',
-                  border: '1px solid rgba(239, 68, 68, 0.35)',
-                }}
-                title="Permanently erase file, thumbnails, and clean up empty folder"
-              >
-                Delete & Purge All
-              </button>
-            </div>
+            <button
+              onClick={() => onDelete(media)}
+              className="btn btn-secondary press-scale"
+              title="Move to trash (recoverable for 30 days)"
+            >
+              Move to Trash
+            </button>
+            <button
+              onClick={handlePermanentPurge}
+              className="btn btn-danger press-scale"
+              style={{
+                background: 'rgba(239, 68, 68, 0.15)',
+                color: '#ef4444',
+                border: '1px solid rgba(239, 68, 68, 0.35)',
+              }}
+              title="Permanently erase file, thumbnails, and clean up empty folder"
+            >
+              Delete & Purge All
+            </button>
           </div>
 
           {/* Signed Private URL Box */}

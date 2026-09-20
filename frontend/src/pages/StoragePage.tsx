@@ -30,11 +30,11 @@ export const StoragePage: React.FC = () => {
       : 0;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', maxWidth: '850px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600 }}>Storage & System</h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+    <div className="page-container" style={{ maxWidth: '920px' }}>
+      <div className="page-header-row">
+        <div className="page-title-group">
+          <h1 className="page-main-title">Storage & System</h1>
+          <p className="page-subtitle">
             Real-time physical host disk usage and media cache telemetry.
           </p>
         </div>
@@ -54,16 +54,16 @@ export const StoragePage: React.FC = () => {
           <div
             style={{
               background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-subtle)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
               borderRadius: 'var(--radius-md)',
-              padding: '20px',
+              padding: '22px',
               display: 'flex',
               flexDirection: 'column',
-              gap: '14px',
+              gap: '16px',
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontSize: '14px', fontWeight: 600 }}>Host Filesystem Volume</span>
+              <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>Host Filesystem Volume</span>
               <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
                 {diskUsedPercent}% Used
               </span>
@@ -88,30 +88,30 @@ export const StoragePage: React.FC = () => {
                       ? 'var(--accent-red)'
                       : diskUsedPercent > 75
                       ? 'var(--accent-orange)'
-                      : 'var(--accent-blue)',
+                      : '#ffffff',
                   transition: 'width 300ms ease',
                 }}
               />
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginTop: '4px' }}>
-              <div>
-                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Total Disk</span>
-                <div style={{ fontSize: '16px', fontWeight: 600, marginTop: '2px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px', marginTop: '4px' }}>
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Total Disk</span>
+                <div style={{ fontSize: '18px', fontWeight: 600, marginTop: '4px', color: 'var(--text-primary)' }}>
                   {formatGB(stats.total_disk_bytes)} GB
                 </div>
               </div>
 
-              <div>
-                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Used by Host</span>
-                <div style={{ fontSize: '16px', fontWeight: 600, marginTop: '2px' }}>
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Used by Host</span>
+                <div style={{ fontSize: '18px', fontWeight: 600, marginTop: '4px', color: 'var(--text-primary)' }}>
                   {formatGB(stats.used_disk_bytes)} GB
                 </div>
               </div>
 
-              <div>
-                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Available Free</span>
-                <div style={{ fontSize: '16px', fontWeight: 600, marginTop: '2px', color: 'var(--accent-green)' }}>
+              <div style={{ background: 'rgba(255,255,255,0.02)', padding: '12px 14px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Available Free</span>
+                <div style={{ fontSize: '18px', fontWeight: 600, marginTop: '4px', color: 'var(--accent-green)' }}>
                   {formatGB(stats.available_disk_bytes)} GB
                 </div>
               </div>
@@ -122,30 +122,30 @@ export const StoragePage: React.FC = () => {
           <div
             style={{
               background: 'var(--bg-secondary)',
-              border: '1px solid var(--border-subtle)',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
               borderRadius: 'var(--radius-md)',
-              padding: '20px',
+              padding: '22px',
               display: 'flex',
               flexDirection: 'column',
               gap: '16px',
             }}
           >
-            <span style={{ fontSize: '14px', fontWeight: 600 }}>Media Platform Breakdown</span>
+            <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text-primary)' }}>Media Platform Breakdown</span>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '14px' }}>
               <div
                 style={{
                   background: 'rgba(255,255,255,0.02)',
                   border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '12px',
+                  borderRadius: '8px',
+                  padding: '14px',
                 }}
               >
-                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Images</span>
-                <div style={{ fontSize: '15px', fontWeight: 600, marginTop: '4px' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Images</span>
+                <div style={{ fontSize: '17px', fontWeight: 600, marginTop: '4px', color: 'var(--text-primary)' }}>
                   {formatMB(stats.images_usage_bytes)} MB
                 </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
                   {stats.total_images_count} assets
                 </div>
               </div>
@@ -154,15 +154,15 @@ export const StoragePage: React.FC = () => {
                 style={{
                   background: 'rgba(255,255,255,0.02)',
                   border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '12px',
+                  borderRadius: '8px',
+                  padding: '14px',
                 }}
               >
-                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Videos</span>
-                <div style={{ fontSize: '15px', fontWeight: 600, marginTop: '4px' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Videos</span>
+                <div style={{ fontSize: '17px', fontWeight: 600, marginTop: '4px', color: 'var(--text-primary)' }}>
                   {formatMB(stats.videos_usage_bytes)} MB
                 </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
                   {stats.total_videos_count} assets
                 </div>
               </div>
@@ -171,15 +171,15 @@ export const StoragePage: React.FC = () => {
                 style={{
                   background: 'rgba(255,255,255,0.02)',
                   border: '1px solid var(--border-subtle)',
-                  borderRadius: 'var(--radius-sm)',
-                  padding: '12px',
+                  borderRadius: '8px',
+                  padding: '14px',
                 }}
               >
-                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>Thumbnails</span>
-                <div style={{ fontSize: '15px', fontWeight: 600, marginTop: '4px' }}>
+                <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.4px' }}>Thumbnails</span>
+                <div style={{ fontSize: '17px', fontWeight: 600, marginTop: '4px', color: 'var(--text-primary)' }}>
                   {formatMB(stats.thumbnails_usage_bytes)} MB
                 </div>
-                <div style={{ fontSize: '11px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+                <div style={{ fontSize: '12px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
                   generated
                 </div>
               </div>
@@ -189,9 +189,11 @@ export const StoragePage: React.FC = () => {
               style={{
                 display: 'flex',
                 justifyContent: 'space-between',
-                paddingTop: '12px',
+                paddingTop: '14px',
                 borderTop: '1px solid var(--border-subtle)',
                 fontSize: '13px',
+                flexWrap: 'wrap',
+                gap: '8px',
               }}
             >
               <span style={{ color: 'var(--text-secondary)' }}>Total Platform Storage Footprint:</span>

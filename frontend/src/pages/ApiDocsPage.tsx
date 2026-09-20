@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 
 
 interface EndpointDef {
@@ -618,8 +618,6 @@ export const ApiDocsPage: React.FC = () => {
   const [liveLoading, setLiveLoading] = useState(false);
   const [liveResponse, setLiveResponse] = useState<{ status: number; latency: number; body: string } | null>(null);
 
-  const responseRef = useRef<HTMLPreElement>(null);
-
   useEffect(() => {
     // Auto-detect base URL: prefer explicit backend URL, then API base origin, then current origin
     const backendUrl = import.meta.env.VITE_BACKEND_URL || '';
@@ -637,13 +635,13 @@ export const ApiDocsPage: React.FC = () => {
 
   const ep = ENDPOINTS.find((e) => e.id === selectedEndpoint)!;
 
-  const copyToClipboard = (text: string, id: string) => {
+  const copySnippet = (text: string, id: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(''), 2000);
   };
 
-  const handleTryItLive = async () => {
+  const executeLiveRequest = async () => {
     setLiveLoading(true);
     setLiveResponse(null);
     const start = performance.now();
@@ -690,18 +688,9 @@ export const ApiDocsPage: React.FC = () => {
   };
 
   return (
-    <div style={{ display: 'flex', gap: '0', height: '100%', overflow: 'hidden' }}>
+    <div className="apidocs-container">
       {/* Left sidebar: endpoint list */}
-      <div
-        style={{
-          width: '260px',
-          minWidth: '260px',
-          borderRight: '1px solid var(--border-subtle)',
-          overflowY: 'auto',
-          background: 'var(--bg-secondary)',
-          padding: '12px 0',
-        }}
-      >
+      <div className="apidocs-sidebar">
         <div style={{ padding: '0 16px 12px', fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
           Endpoints
         </div>
@@ -733,7 +722,7 @@ export const ApiDocsPage: React.FC = () => {
                   fontSize: '12px',
                   background: selectedEndpoint === e.id ? 'var(--bg-tertiary)' : 'transparent',
                   color: selectedEndpoint === e.id ? 'var(--text-primary)' : 'var(--text-secondary)',
-                  borderLeft: selectedEndpoint === e.id ? '2px solid var(--accent-primary)' : '2px solid transparent',
+                  borderLeft: selectedEndpoint === e.id ? '2px solid #ffffff' : '2px solid transparent',
                   transition: 'all 0.15s ease',
                 }}
               >
@@ -762,7 +751,37 @@ export const ApiDocsPage: React.FC = () => {
       </div>
 
       {/* Right panel: endpoint detail */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '24px 32px' }}>
+      <div className="apidocs-content">
+        {/* Mobile Endpoint Picker */}
+        <div className="apidocs-mobile-header" style={{ display: 'none', marginBottom: '16px' }}>
+          <label style={{ fontSize: '11px', fontWeight: 600, color: 'var(--text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.5px', display: 'block', marginBottom: '6px' }}>
+            Select API Endpoint:
+          </label>
+          <select
+            value={selectedEndpoint}
+            onChange={(e) => { setSelectedEndpoint(e.target.value); setLiveResponse(null); }}
+            style={{
+              width: '100%',
+              background: 'var(--bg-secondary)',
+              border: '1px solid var(--border-subtle)',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              color: '#fff',
+              fontSize: '13px',
+            }}
+          >
+            {CATEGORIES.map((cat) => (
+              <optgroup key={cat} label={cat}>
+                {ENDPOINTS.filter((e) => e.category === cat).map((e) => (
+                  <option key={e.id} value={e.id}>
+                    {e.method} {e.title}
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </div>
+
         {/* API Configuration Bar */}
         <div
           style={{
@@ -821,7 +840,7 @@ export const ApiDocsPage: React.FC = () => {
 
         {/* Endpoint Header */}
         <div style={{ marginBottom: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '6px', flexWrap: 'wrap' }}>
             <span
               style={{
                 fontSize: '12px',
@@ -839,12 +858,12 @@ export const ApiDocsPage: React.FC = () => {
               {ep.path}
             </code>
             {ep.auth && (
-              <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(251, 146, 60, 0.15)', color: '#fb923c', fontWeight: 600 }}>
+              <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.08)', color: '#f5f5f7', fontWeight: 600, border: '1px solid rgba(255, 255, 255, 0.12)' }}>
                 AUTH
               </span>
             )}
             {ep.permission && (
-              <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(168, 85, 247, 0.15)', color: '#c084fc', border: '1px solid rgba(168, 85, 247, 0.3)', fontWeight: 600, fontFamily: 'monospace' }}>
+              <span style={{ fontSize: '10px', padding: '2px 8px', borderRadius: '4px', background: 'rgba(255, 255, 255, 0.06)', color: 'var(--text-secondary)', border: '1px solid rgba(255, 255, 255, 0.1)', fontWeight: 600, fontFamily: 'monospace' }}>
                 SCOPE: {ep.permission}
               </span>
             )}
@@ -857,38 +876,40 @@ export const ApiDocsPage: React.FC = () => {
         {ep.params && ep.params.length > 0 && (
           <div style={{ marginBottom: '20px' }}>
             <h3 style={{ fontSize: '14px', fontWeight: 600, marginBottom: '10px', color: 'var(--text-primary)' }}>Parameters</h3>
-            <div style={{ border: '1px solid var(--border-subtle)', borderRadius: '8px', overflow: 'hidden' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                <thead>
-                  <tr style={{ background: 'var(--bg-tertiary)' }}>
-                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-tertiary)' }}>Name</th>
-                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-tertiary)' }}>In</th>
-                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-tertiary)' }}>Type</th>
-                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-tertiary)' }}>Required</th>
-                    <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-tertiary)' }}>Description</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ep.params.map((p) => (
-                    <tr key={p.name} style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                      <td style={{ padding: '8px 12px' }}><code style={{ color: '#93c5fd', fontFamily: 'monospace' }}>{p.name}</code></td>
-                      <td style={{ padding: '8px 12px', color: 'var(--text-tertiary)' }}>{p.in}</td>
-                      <td style={{ padding: '8px 12px', color: 'var(--text-tertiary)' }}>{p.type}</td>
-                      <td style={{ padding: '8px 12px' }}>
-                        {p.required ? <span style={{ color: '#ef4444' }}>Yes</span> : <span style={{ color: 'var(--text-tertiary)' }}>No</span>}
-                      </td>
-                      <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>{p.description}</td>
+            <div className="table-card">
+              <div className="table-responsive-wrapper">
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px', minWidth: '500px' }}>
+                  <thead>
+                    <tr style={{ background: 'var(--bg-tertiary)' }}>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-tertiary)' }}>Name</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-tertiary)' }}>In</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-tertiary)' }}>Type</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-tertiary)' }}>Required</th>
+                      <th style={{ padding: '8px 12px', textAlign: 'left', fontWeight: 600, color: 'var(--text-tertiary)' }}>Description</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody>
+                    {ep.params.map((p) => (
+                      <tr key={p.name} style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                        <td style={{ padding: '8px 12px' }}><code style={{ color: 'var(--text-primary)', fontFamily: 'monospace' }}>{p.name}</code></td>
+                        <td style={{ padding: '8px 12px', color: 'var(--text-tertiary)' }}>{p.in}</td>
+                        <td style={{ padding: '8px 12px', color: 'var(--text-tertiary)' }}>{p.type}</td>
+                        <td style={{ padding: '8px 12px' }}>
+                          {p.required ? <span style={{ color: '#ef4444' }}>Yes</span> : <span style={{ color: 'var(--text-tertiary)' }}>No</span>}
+                        </td>
+                        <td style={{ padding: '8px 12px', color: 'var(--text-secondary)' }}>{p.description}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
 
         {/* Code Snippets */}
         <div style={{ marginBottom: '20px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
             <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Code Examples</h3>
             <div style={{ display: 'flex', gap: '2px', background: 'var(--bg-tertiary)', borderRadius: '6px', padding: '2px' }}>
               {(Object.keys(langLabels) as SnippetLang[]).map((lang) => (
@@ -898,12 +919,12 @@ export const ApiDocsPage: React.FC = () => {
                   style={{
                     padding: '4px 12px',
                     fontSize: '11px',
-                    fontWeight: 500,
-                    border: 'none',
+                    fontWeight: selectedLang === lang ? 600 : 400,
                     borderRadius: '4px',
-                    cursor: 'pointer',
-                    background: selectedLang === lang ? 'var(--accent-primary)' : 'transparent',
+                    background: selectedLang === lang ? 'rgba(255,255,255,0.1)' : 'transparent',
                     color: selectedLang === lang ? '#fff' : 'var(--text-tertiary)',
+                    border: 'none',
+                    cursor: 'pointer',
                     transition: 'all 0.15s ease',
                   }}
                 >
@@ -912,6 +933,7 @@ export const ApiDocsPage: React.FC = () => {
               ))}
             </div>
           </div>
+
           <div style={{ position: 'relative' }}>
             <pre
               style={{
@@ -923,8 +945,9 @@ export const ApiDocsPage: React.FC = () => {
                 fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
                 color: '#d4d4d8',
                 overflow: 'auto',
-                maxHeight: '400px',
-                lineHeight: '1.6',
+                maxHeight: '300px',
+                lineHeight: '1.5',
+                margin: 0,
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-all',
               }}
@@ -932,146 +955,132 @@ export const ApiDocsPage: React.FC = () => {
               {snippet}
             </pre>
             <button
-              onClick={() => copyToClipboard(snippet, 'snippet')}
+              onClick={() => copySnippet(snippet, 'snippet')}
               style={{
                 position: 'absolute',
-                top: '8px',
-                right: '8px',
-                background: copiedId === 'snippet' ? '#22c55e' : 'rgba(255,255,255,0.08)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '4px',
+                top: '10px',
+                right: '10px',
                 padding: '4px 10px',
-                color: '#fff',
                 fontSize: '11px',
+                borderRadius: '5px',
+                background: copiedId === 'snippet' ? '#22c55e' : 'rgba(255,255,255,0.08)',
+                color: '#fff',
+                border: '1px solid var(--border-subtle)',
                 cursor: 'pointer',
-                transition: 'all 0.2s ease',
+                transition: 'all 0.15s ease',
               }}
             >
-              {copiedId === 'snippet' ? 'Copied' : 'Copy'}
+              {copiedId === 'snippet' ? 'Copied!' : 'Copy'}
             </button>
           </div>
         </div>
 
-        {/* Try It Live */}
-        {(ep.method === 'GET') && (
-          <div style={{ marginBottom: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
-              <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>Try It Live</h3>
-              <button
-                onClick={handleTryItLive}
-                disabled={liveLoading}
-                style={{
-                  background: liveLoading ? 'var(--bg-tertiary)' : 'var(--accent-primary)',
-                  border: 'none',
-                  borderRadius: '6px',
-                  padding: '6px 16px',
-                  color: '#fff',
-                  fontSize: '12px',
-                  fontWeight: 600,
-                  cursor: liveLoading ? 'not-allowed' : 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  transition: 'all 0.15s ease',
-                }}
-              >
-                {liveLoading ? (
-                  <span>Sending...</span>
-                ) : (
-                  <>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                    Send Request
-                  </>
-                )}
-              </button>
-            </div>
-            {liveResponse && (
+        {/* Live Test Console */}
+        <div style={{ marginBottom: '20px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Live Request Runner</h3>
+            <button
+              onClick={executeLiveRequest}
+              disabled={liveLoading}
+              style={{
+                padding: '6px 16px',
+                fontSize: '12px',
+                fontWeight: 600,
+                borderRadius: '6px',
+                background: liveLoading ? 'var(--bg-tertiary)' : 'var(--accent-primary, #ffffff)',
+                color: liveLoading ? 'var(--text-tertiary)' : '#000000',
+                border: 'none',
+                cursor: liveLoading ? 'not-allowed' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {liveLoading ? 'Sending...' : '▶ Send Request'}
+            </button>
+          </div>
+
+          {liveResponse && (
+            <div style={{ border: '1px solid var(--border-subtle)', borderRadius: '8px', overflow: 'hidden' }}>
               <div
                 style={{
-                  background: '#0d0d0e',
-                  border: '1px solid var(--border-subtle)',
-                  borderRadius: '8px',
-                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '8px 14px',
+                  background: 'var(--bg-tertiary)',
+                  fontSize: '12px',
                 }}
               >
-                <div
-                  style={{
-                    display: 'flex',
-                    gap: '16px',
-                    padding: '8px 16px',
-                    borderBottom: '1px solid var(--border-subtle)',
-                    fontSize: '12px',
-                    alignItems: 'center',
-                  }}
-                >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   <span style={{ color: liveResponse.status >= 200 && liveResponse.status < 300 ? '#22c55e' : '#ef4444', fontWeight: 600 }}>
-                    {liveResponse.status || 'ERR'}
+                    HTTP {liveResponse.status}
                   </span>
                   <span style={{ color: 'var(--text-tertiary)' }}>{liveResponse.latency}ms</span>
-                  <button
-                    onClick={() => copyToClipboard(liveResponse.body, 'live')}
-                    style={{
-                      marginLeft: 'auto',
-                      background: copiedId === 'live' ? '#22c55e' : 'rgba(255,255,255,0.05)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      borderRadius: '4px',
-                      padding: '2px 8px',
-                      color: '#fff',
-                      fontSize: '10px',
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {copiedId === 'live' ? 'Copied' : 'Copy'}
-                  </button>
                 </div>
-                <pre
-                  ref={responseRef}
+                <button
+                  onClick={() => copySnippet(typeof liveResponse.body === 'string' ? liveResponse.body : JSON.stringify(liveResponse.body, null, 2), 'live')}
                   style={{
-                    padding: '12px 16px',
+                    padding: '2px 8px',
                     fontSize: '11px',
-                    fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
-                    color: '#a1a1aa',
-                    overflow: 'auto',
-                    maxHeight: '350px',
-                    lineHeight: '1.5',
-                    margin: 0,
-                    whiteSpace: 'pre-wrap',
+                    borderRadius: '4px',
+                    background: copiedId === 'live' ? '#22c55e' : 'rgba(255,255,255,0.05)',
+                    color: '#fff',
+                    border: '1px solid var(--border-subtle)',
+                    cursor: 'pointer',
                   }}
                 >
-                  {liveResponse.body}
-                </pre>
-                {liveResponse.status === 403 && (
-                  <div style={{ padding: '10px 16px', background: 'rgba(239, 68, 68, 0.1)', borderTop: '1px solid rgba(239, 68, 68, 0.2)', fontSize: '12px', color: '#fca5a5' }}>
-                    ⚠️ <strong>Permission Denied (403):</strong> Your API key does not have the <code>{ep.permission || 'required'}</code> permission for this endpoint. Go to <strong>Settings → API Keys</strong> to generate a key with the appropriate scope.
-                  </div>
-                )}
-                {liveResponse.status === 401 && (
-                  <div style={{ padding: '10px 16px', background: 'rgba(239, 68, 68, 0.1)', borderTop: '1px solid rgba(239, 68, 68, 0.2)', fontSize: '12px', color: '#fca5a5' }}>
-                    ⚠️ <strong>Unauthorized (401):</strong> Missing or invalid API key. Make sure to paste a valid key starting with <code>mk_live_</code> into the API Key input above.
-                  </div>
-                )}
+                  {copiedId === 'live' ? 'Copied!' : 'Copy'}
+                </button>
               </div>
-            )}
-          </div>
-        )}
+              <pre
+                style={{
+                  background: '#0d0d0e',
+                  padding: '14px',
+                  fontSize: '12px',
+                  fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+                  color: '#a1a1aa',
+                  overflow: 'auto',
+                  maxHeight: '300px',
+                  lineHeight: '1.5',
+                  margin: 0,
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                {typeof liveResponse.body === 'string' ? liveResponse.body : JSON.stringify(liveResponse.body, null, 2)}
+              </pre>
+              {liveResponse.status === 401 && (
+                <div style={{ padding: '10px 16px', background: 'rgba(239, 68, 68, 0.1)', borderTop: '1px solid rgba(239, 68, 68, 0.2)', fontSize: '12px', color: '#fca5a5' }}>
+                  Tip: Provide a valid API key in the configuration bar above to test authenticated endpoints.
+                </div>
+              )}
+              {liveResponse.status === 0 && (
+                <div style={{ padding: '10px 16px', background: 'rgba(239, 68, 68, 0.1)', borderTop: '1px solid rgba(239, 68, 68, 0.2)', fontSize: '12px', color: '#fca5a5' }}>
+                  Network error. Check that the base URL is correct and the backend is running.
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
-        {/* Example Response */}
-        <div style={{ marginBottom: '20px' }}>
+        {/* Expected Response */}
+        <div style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Response Example</h3>
+            <h3 style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>Response Schema (200 OK)</h3>
             <button
-              onClick={() => copyToClipboard(ep.responseExample, 'response')}
+              onClick={() => copySnippet(ep.responseExample, 'response')}
               style={{
-                background: copiedId === 'response' ? '#22c55e' : 'rgba(255,255,255,0.05)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '4px',
-                padding: '3px 10px',
-                color: '#fff',
+                padding: '3px 9px',
                 fontSize: '11px',
+                borderRadius: '4px',
+                background: copiedId === 'response' ? '#22c55e' : 'rgba(255,255,255,0.05)',
+                color: '#fff',
+                border: '1px solid var(--border-subtle)',
                 cursor: 'pointer',
               }}
             >
-              {copiedId === 'response' ? 'Copied' : 'Copy'}
+              {copiedId === 'response' ? 'Copied!' : 'Copy'}
             </button>
           </div>
           <pre
@@ -1098,19 +1107,63 @@ export const ApiDocsPage: React.FC = () => {
         {ep.auth && (
           <div style={{
             padding: '12px 16px',
-            background: 'rgba(251, 146, 60, 0.08)',
-            border: '1px solid rgba(251, 146, 60, 0.2)',
+            background: 'rgba(255, 255, 255, 0.04)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
             borderRadius: '8px',
             fontSize: '12px',
-            color: '#fdba74',
+            color: 'var(--text-secondary)',
             lineHeight: '1.6',
           }}>
-            <strong>Authentication Required</strong> &mdash; Pass your API key via the <code style={{ background: 'rgba(0,0,0,0.3)', padding: '1px 5px', borderRadius: '3px' }}>X-API-Key</code> header
-            or use <code style={{ background: 'rgba(0,0,0,0.3)', padding: '1px 5px', borderRadius: '3px' }}>Authorization: Bearer {'<token>'}</code> from a session login.
+            <strong style={{ color: 'var(--text-primary)' }}>Authentication Required</strong> &mdash; Pass your API key via the <code style={{ background: 'rgba(0,0,0,0.4)', padding: '1px 5px', borderRadius: '4px', color: '#fff' }}>X-API-Key</code> header
+            or use <code style={{ background: 'rgba(0,0,0,0.4)', padding: '1px 5px', borderRadius: '4px', color: '#fff' }}>Authorization: Bearer {'<token>'}</code> from a session login.
             Generate API keys from the <strong>API Keys</strong> page in the dashboard.
           </div>
         )}
       </div>
+
+      <style>{`
+        .apidocs-container {
+          display: flex;
+          height: 100%;
+          overflow: hidden;
+        }
+
+        .apidocs-sidebar {
+          width: 260px;
+          min-width: 260px;
+          border-right: 1px solid var(--border-subtle);
+          overflow-y: auto;
+          background: var(--bg-secondary);
+          padding: 12px 0;
+        }
+
+        .apidocs-content {
+          flex: 1;
+          overflow-y: auto;
+          padding: 24px 32px;
+        }
+
+        @media (max-width: 768px) {
+          .apidocs-container {
+            flex-direction: column;
+            height: auto;
+            min-height: 100%;
+            overflow: visible;
+          }
+
+          .apidocs-sidebar {
+            display: none;
+          }
+
+          .apidocs-mobile-header {
+            display: block !important;
+          }
+
+          .apidocs-content {
+            padding: 14px !important;
+          }
+        }
+      `}</style>
     </div>
   );
 };

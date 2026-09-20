@@ -475,15 +475,9 @@ export const MediaPage: React.FC<MediaPageProps> = ({
         </div>
       ) : (
         /* List View */
-        <div
-          style={{
-            background: 'var(--bg-secondary)',
-            border: '1px solid var(--border-subtle)',
-            borderRadius: 'var(--radius-md)',
-            overflow: 'hidden',
-          }}
-        >
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
+        <div className="table-card">
+          <div className="table-responsive-wrapper">
+            <table className="data-table" style={{ minWidth: '640px' }}>
             <thead>
               <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)' }}>
                 <th style={{ padding: '12px 16px', width: '40px' }}>
@@ -563,6 +557,7 @@ export const MediaPage: React.FC<MediaPageProps> = ({
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
 

@@ -78,11 +78,11 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '900px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600 }}>Trash / Recycle Bin</h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+    <div className="page-container" style={{ maxWidth: '920px' }}>
+      <div className="page-header-row">
+        <div className="page-title-group">
+          <h1 className="page-main-title">Trash / Recycle Bin</h1>
+          <p className="page-subtitle">
             Soft-deleted items remain recoverable for 30 days before automatic cleanup.
           </p>
         </div>
@@ -97,14 +97,7 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
         )}
       </div>
 
-      <div
-        style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-md)',
-          overflow: 'hidden',
-        }}
-      >
+      <div className="table-card">
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
             Loading trash...
@@ -114,47 +107,49 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
             Trash is empty. Deleted files will appear here.
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)' }}>
-                <th style={{ padding: '12px 18px' }}>Filename</th>
-                <th style={{ padding: '12px 18px' }}>Size</th>
-                <th style={{ padding: '12px 18px' }}>Deleted Date</th>
-                <th style={{ padding: '12px 18px', textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((item) => (
-                <tr key={item.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                  <td style={{ padding: '12px 18px', fontWeight: 500 }}>{item.filename}</td>
-                  <td style={{ padding: '12px 18px', color: 'var(--text-tertiary)' }}>
-                    {formatBytes(item.file_size)}
-                  </td>
-                  <td style={{ padding: '12px 18px', color: 'var(--text-tertiary)' }}>
-                    {item.deleted_at ? new Date(item.deleted_at).toLocaleDateString() : 'Recently'}
-                  </td>
-                  <td style={{ padding: '12px 18px', textAlign: 'right' }}>
-                    <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                      <button
-                        onClick={() => handleRestore(item.id, item.filename)}
-                        className="btn btn-secondary press-scale"
-                        style={{ padding: '4px 8px', fontSize: '11px' }}
-                      >
-                        Restore
-                      </button>
-                      <button
-                        onClick={() => handlePermanentDelete(item.id, item.filename)}
-                        className="btn btn-ghost press-scale"
-                        style={{ padding: '4px 8px', fontSize: '11px', color: 'var(--accent-red)' }}
-                      >
-                        Delete Permanently
-                      </button>
-                    </div>
-                  </td>
+          <div className="table-responsive-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Filename</th>
+                  <th>Size</th>
+                  <th>Deleted Date</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr key={item.id}>
+                    <td style={{ fontWeight: 500 }}>{item.filename}</td>
+                    <td style={{ color: 'var(--text-tertiary)' }}>
+                      {formatBytes(item.file_size)}
+                    </td>
+                    <td style={{ color: 'var(--text-tertiary)' }}>
+                      {item.deleted_at ? new Date(item.deleted_at).toLocaleDateString() : 'Recently'}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+                        <button
+                          onClick={() => handleRestore(item.id, item.filename)}
+                          className="btn btn-secondary press-scale"
+                          style={{ padding: '4px 8px', fontSize: '11px' }}
+                        >
+                          Restore
+                        </button>
+                        <button
+                          onClick={() => handlePermanentDelete(item.id, item.filename)}
+                          className="btn btn-ghost press-scale"
+                          style={{ padding: '4px 8px', fontSize: '11px', color: 'var(--accent-red)' }}
+                        >
+                          Delete Permanently
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -176,3 +171,4 @@ export const TrashPage: React.FC<{ onDataChanged: () => void }> = ({ onDataChang
     </div>
   );
 };
+

@@ -297,14 +297,14 @@ export const SettingsPage: React.FC = () => {
   }
 
   return (
-    <div className="settings-page-wrapper">
+    <div className="page-container">
       {/* Header Row */}
-      <div className="settings-header-row">
-        <div className="settings-title-group">
-          <h1 className="settings-page-title">
+      <div className="page-header-row">
+        <div className="page-title-group">
+          <h1 className="page-main-title">
             Platform Settings
           </h1>
-          <p className="settings-page-subtitle">
+          <p className="page-subtitle">
             Configure domain routing topologies, Better Stack 24/7 out-of-band monitoring, media upload policies, and retention schedules.
           </p>
         </div>
@@ -951,43 +951,6 @@ export const SettingsPage: React.FC = () => {
 
       {/* Scoped Clean Apple Obsidian CSS */}
       <style>{`
-        .settings-page-wrapper {
-          max-width: 920px;
-          margin: 0 auto;
-          width: 100%;
-          padding: 8px 16px 80px 16px;
-          display: flex;
-          flex-direction: column;
-          gap: 24px;
-        }
-
-        .settings-header-row {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 16px;
-          flex-wrap: wrap;
-        }
-
-        .settings-title-group {
-          flex: 1;
-          min-width: 260px;
-        }
-
-        .settings-page-title {
-          font-size: 22px;
-          font-weight: 600;
-          letter-spacing: -0.02em;
-          margin: 0;
-          color: var(--text-primary);
-        }
-
-        .settings-page-subtitle {
-          font-size: 13px;
-          color: var(--text-secondary);
-          margin: 4px 0 0;
-          line-height: 1.5;
-        }
 
         .settings-header-save-btn {
           padding: 8px 20px;
@@ -1229,19 +1192,9 @@ export const SettingsPage: React.FC = () => {
         }
 
         @media (max-width: 640px) {
-          .settings-page-wrapper {
-            padding: 8px 12px 60px 12px;
-            gap: 18px;
-          }
-
           .settings-card {
             padding: 16px;
             gap: 16px;
-          }
-
-          .settings-header-row {
-            flex-direction: column;
-            align-items: stretch;
           }
 
           .settings-header-save-btn {

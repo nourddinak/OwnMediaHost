@@ -419,3 +419,118 @@ input, select, textarea {
   from { opacity: 0; }
   to { opacity: 1; }
 }
+
+/* Universal Page Shell & Layout Alignment (Apple Obsidian Design) */
+.page-container {
+  max-width: 960px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding-bottom: 60px;
+}
+
+.page-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.page-title-group {
+  flex: 1;
+  min-width: 240px;
+}
+
+.page-main-title {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+  color: var(--text-primary);
+}
+
+.page-subtitle {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 4px 0 0;
+  line-height: 1.5;
+}
+
+/* Responsive Table & Card Wrappers */
+.table-responsive-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-card {
+  background: var(--bg-secondary);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+  min-width: 580px;
+}
+
+.data-table th {
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--text-tertiary);
+  font-weight: 500;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 12px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  vertical-align: middle;
+}
+
+.data-table tr:last-child td {
+  border-bottom: none;
+}
+
+@media (max-width: 640px) {
+  .page-container {
+    padding-bottom: 40px;
+    gap: 16px;
+  }
+  .page-main-title {
+    font-size: 19px;
+  }
+  .page-subtitle {
+    font-size: 12px;
+  }
+  .page-header-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+  .page-header-row .btn {
+    width: 100%;
+    justify-content: center;
+  }
+  .drawer-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-left: none !important;
+  }
+  .table-card {
+    border-radius: 10px;
+  }
+  .data-table th, .data-table td {
+    padding: 10px 14px;
+    font-size: 12px;
+  }
+}
+

@@ -95,11 +95,11 @@ export const ApiKeysPage: React.FC = () => {
   const paginatedKeys = keys.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '20px', maxWidth: '900px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <div>
-          <h2 style={{ fontSize: '18px', fontWeight: 600 }}>API Keys</h2>
-          <p style={{ fontSize: '13px', color: 'var(--text-tertiary)', marginTop: '2px' }}>
+    <div className="page-container" style={{ maxWidth: '920px' }}>
+      <div className="page-header-row">
+        <div className="page-title-group">
+          <h1 className="page-main-title">API Keys</h1>
+          <p className="page-subtitle">
             Manage programmatic access keys for applications, mobile clients, scripts, and portfolio websites.
           </p>
         </div>
@@ -113,8 +113,8 @@ export const ApiKeysPage: React.FC = () => {
       {newlyCreatedKey?.secret_key && (
         <div
           style={{
-            background: 'rgba(255, 159, 10, 0.08)',
-            border: '1px solid rgba(255, 159, 10, 0.3)',
+            background: 'rgba(255, 255, 255, 0.04)',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
             borderRadius: 'var(--radius-md)',
             padding: '16px 20px',
             display: 'flex',
@@ -123,11 +123,11 @@ export const ApiKeysPage: React.FC = () => {
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: 'var(--accent-orange)', fontWeight: 600, fontSize: '13px' }}>
-              ⚠️ Copy this API key now
+            <span style={{ color: 'var(--text-primary)', fontWeight: 600, fontSize: '13px' }}>
+              Important: Copy this API key now
             </span>
           </div>
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
             For security, the secret key is hashed and cannot be displayed again. If you lose it, you will need to generate a new key.
           </p>
 
@@ -136,10 +136,11 @@ export const ApiKeysPage: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '10px',
-              background: '#0a0a0b',
+              background: '#09090b',
               border: '1px solid rgba(255, 255, 255, 0.1)',
-              borderRadius: '6px',
+              borderRadius: '8px',
               padding: '8px 12px',
+              flexWrap: 'wrap',
             }}
           >
             <code
@@ -148,6 +149,7 @@ export const ApiKeysPage: React.FC = () => {
                 fontSize: '12px',
                 color: '#fff',
                 flex: 1,
+                minWidth: '200px',
                 wordBreak: 'break-all',
               }}
             >
@@ -156,7 +158,7 @@ export const ApiKeysPage: React.FC = () => {
             <button
               onClick={() => copySecret(newlyCreatedKey.secret_key!)}
               className="btn btn-primary press-scale"
-              style={{ padding: '5px 12px', fontSize: '12px' }}
+              style={{ padding: '6px 14px', fontSize: '12px', borderRadius: '6px' }}
             >
               Copy Secret
             </button>
@@ -164,12 +166,13 @@ export const ApiKeysPage: React.FC = () => {
 
           <button
             onClick={() => setNewlyCreatedKey(null)}
-            style={{ alignSelf: 'flex-start', fontSize: '11px', color: 'var(--text-tertiary)' }}
+            style={{ alignSelf: 'flex-start', fontSize: '11px', color: 'var(--text-tertiary)', textDecoration: 'underline', marginTop: '2px' }}
           >
-            Dismiss warning
+            Dismiss notice
           </button>
         </div>
       )}
+
 
       {/* Create Key Modal/Drawer */}
       {creating && (
@@ -287,14 +290,7 @@ export const ApiKeysPage: React.FC = () => {
       )}
 
       {/* Keys List */}
-      <div
-        style={{
-          background: 'var(--bg-secondary)',
-          border: '1px solid var(--border-subtle)',
-          borderRadius: 'var(--radius-md)',
-          overflow: 'hidden',
-        }}
-      >
+      <div className="table-card">
         {loading ? (
           <div style={{ padding: '40px', textAlign: 'center', color: 'var(--text-tertiary)' }}>
             Loading API keys...
@@ -304,75 +300,77 @@ export const ApiKeysPage: React.FC = () => {
             No API keys created yet. Click "+ Create Key" to generate credentials.
           </div>
         ) : (
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', textAlign: 'left' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-tertiary)' }}>
-                <th style={{ padding: '12px 18px' }}>Name</th>
-                <th style={{ padding: '12px 18px' }}>Key Prefix</th>
-                <th style={{ padding: '12px 18px' }}>Scopes</th>
-                <th style={{ padding: '12px 18px' }}>Last Used</th>
-                <th style={{ padding: '12px 18px', textAlign: 'right' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {paginatedKeys.map((k) => (
-                <tr key={k.id} style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                  <td style={{ padding: '12px 18px', fontWeight: 500 }}>
-                    {k.name}
-                    {k.revoked_at && (
-                      <span
-                        style={{
-                          marginLeft: '8px',
-                          fontSize: '10px',
-                          color: 'var(--accent-red)',
-                          border: '1px solid rgba(255,69,58,0.3)',
-                          padding: '1px 5px',
-                          borderRadius: '4px',
-                        }}
-                      >
-                        REVOKED
-                      </span>
-                    )}
-                  </td>
-                  <td style={{ padding: '12px 18px', fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-secondary)' }}>
-                    {k.key_prefix}...
-                  </td>
-                  <td style={{ padding: '12px 18px' }}>
-                    <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
-                      {k.permissions.map((p) => (
+          <div className="table-responsive-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Key Prefix</th>
+                  <th>Scopes</th>
+                  <th>Last Used</th>
+                  <th style={{ textAlign: 'right' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paginatedKeys.map((k) => (
+                  <tr key={k.id}>
+                    <td style={{ fontWeight: 500 }}>
+                      {k.name}
+                      {k.revoked_at && (
                         <span
-                          key={p}
                           style={{
+                            marginLeft: '8px',
                             fontSize: '10px',
-                            background: 'rgba(255,255,255,0.06)',
-                            padding: '2px 5px',
-                            borderRadius: '3px',
-                            color: 'var(--text-secondary)',
+                            color: 'var(--accent-red)',
+                            border: '1px solid rgba(255,69,58,0.3)',
+                            padding: '1px 5px',
+                            borderRadius: '4px',
                           }}
                         >
-                          {p}
+                          REVOKED
                         </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td style={{ padding: '12px 18px', color: 'var(--text-tertiary)', fontSize: '12px' }}>
-                    {k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : 'Never'}
-                  </td>
-                  <td style={{ padding: '12px 18px', textAlign: 'right' }}>
-                    {!k.revoked_at && (
-                      <button
-                        onClick={() => handleRevoke(k.id, k.name)}
-                        className="btn btn-ghost press-scale"
-                        style={{ padding: '4px 8px', fontSize: '11px', color: 'var(--accent-red)' }}
-                      >
-                        Revoke
-                      </button>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                      )}
+                    </td>
+                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      {k.key_prefix}...
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '4px', flexWrap: 'wrap' }}>
+                        {k.permissions.map((p) => (
+                          <span
+                            key={p}
+                            style={{
+                              fontSize: '10px',
+                              background: 'rgba(255,255,255,0.06)',
+                              padding: '2px 5px',
+                              borderRadius: '3px',
+                              color: 'var(--text-secondary)',
+                            }}
+                          >
+                            {p}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td style={{ color: 'var(--text-tertiary)', fontSize: '12px' }}>
+                      {k.last_used_at ? new Date(k.last_used_at).toLocaleDateString() : 'Never'}
+                    </td>
+                    <td style={{ textAlign: 'right' }}>
+                      {!k.revoked_at && (
+                        <button
+                          onClick={() => handleRevoke(k.id, k.name)}
+                          className="btn btn-ghost press-scale"
+                          style={{ padding: '4px 8px', fontSize: '11px', color: 'var(--accent-red)' }}
+                        >
+                          Revoke
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
 
         {keys.length > 0 && (
