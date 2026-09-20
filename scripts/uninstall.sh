@@ -204,20 +204,20 @@ fi
 echo ""
 log_info "Beginning uninstallation..."
 
-# 1. Stop and Disable Systemd Service (both ownmediahost and legacy selfmedia)
-for svc in ownmediahost selfmedia; do
-    if systemctl is-active --quiet "$svc" 2>/dev/null; then
-        log_info "Stopping systemd service (${svc}.service)..."
-        as_root systemctl stop "$svc" || true
+# 1. Stop and Disable Systemd Services & Units
+for unit in ownmediahost-update.path ownmediahost-update.service ownmediahost.service selfmedia.service; do
+    if systemctl is-active --quiet "$unit" 2>/dev/null; then
+        log_info "Stopping systemd unit (${unit})..."
+        as_root systemctl stop "$unit" || true
     fi
-    if systemctl is-enabled --quiet "$svc" 2>/dev/null; then
-        as_root systemctl disable "$svc" || true
+    if systemctl is-enabled --quiet "$unit" 2>/dev/null; then
+        as_root systemctl disable "$unit" || true
     fi
-    if [ -f "/etc/systemd/system/${svc}.service" ]; then
-        as_root rm -f "/etc/systemd/system/${svc}.service"
+    if [ -f "/etc/systemd/system/${unit}" ]; then
+        as_root rm -f "/etc/systemd/system/${unit}"
         as_root systemctl daemon-reload
-        as_root systemctl reset-failed "$svc" 2>/dev/null || true
-        log_success "Systemd service '${svc}' stopped and removed."
+        as_root systemctl reset-failed "$unit" 2>/dev/null || true
+        log_success "Systemd unit '${unit}' stopped and removed."
     fi
 done
 

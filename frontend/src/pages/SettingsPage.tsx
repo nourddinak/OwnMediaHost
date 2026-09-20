@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { api } from '../api/client';
 import { useToast } from '../context/ToastContext';
 
@@ -14,6 +14,25 @@ export const SettingsPage: React.FC = () => {
   const [initialSettings, setInitialSettings] = useState<Record<string, string>>({});
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [copiedUpdateCmd, setCopiedUpdateCmd] = useState(false);
+
+  // 1-Click Server Update states
+  const [updatePhase, setUpdatePhase] = useState<'idle' | 'running' | 'reconnecting' | 'completed' | 'error'>('idle');
+  const [updateLogs, setUpdateLogs] = useState<string>('');
+  const [updateError, setUpdateError] = useState<string | null>(null);
+  const logTerminalRef = useRef<HTMLPreElement>(null);
+  const pollTimerRef = useRef<any>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (logTerminalRef.current) {
+      logTerminalRef.current.scrollTop = logTerminalRef.current.scrollHeight;
+    }
+  }, [updateLogs]);
 
   useEffect(() => {
     const fetchSettings = async () => {
@@ -62,6 +81,9 @@ export const SettingsPage: React.FC = () => {
       setInitialSettings(settings);
       toast('Platform settings updated successfully!');
       if (domainChanged) {
+        setUpdatePhase('idle');
+        setUpdateLogs('');
+        setUpdateError(null);
         setShowUpdateModal(true);
       }
     } catch (err: any) {
@@ -69,6 +91,69 @@ export const SettingsPage: React.FC = () => {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleTriggerUpdate = async () => {
+    setUpdatePhase('running');
+    setUpdateLogs('⚡ Signaling systemd to execute server update and Caddy routing sync...\n');
+    setUpdateError(null);
+
+    try {
+      await api.triggerUpdate();
+      setUpdateLogs((prev) => prev + '✓ Update signal registered by systemd path watcher.\nStarting background process...\n\n');
+
+      let errorCount = 0;
+      if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+      pollTimerRef.current = setInterval(async () => {
+        try {
+          const res = await api.getUpdateStatus();
+          errorCount = 0;
+          if (res.log) {
+            setUpdateLogs(res.log);
+          }
+          if (res.success) {
+            clearInterval(pollTimerRef.current);
+            startReconnectionCheck();
+          }
+        } catch {
+          // Network errors occur naturally during backend service restart
+          errorCount++;
+          if (errorCount >= 2) {
+            clearInterval(pollTimerRef.current);
+            setUpdateLogs((prev) => prev + '\n[INFO] Backend service restarting... Waiting for server reconnection...\n');
+            startReconnectionCheck();
+          }
+        }
+      }, 1500);
+    } catch (err: any) {
+      setUpdatePhase('error');
+      setUpdateError(err.message || 'Failed to trigger background update.');
+    }
+  };
+
+  const startReconnectionCheck = () => {
+    setUpdatePhase('reconnecting');
+    const startTime = Date.now();
+
+    const checkInterval = setInterval(async () => {
+      try {
+        const res = await fetch('/health', { cache: 'no-store' });
+        if (res.ok) {
+          clearInterval(checkInterval);
+          setUpdatePhase('completed');
+          toast('Server update and domain routing applied successfully!');
+          setTimeout(() => {
+            window.location.reload();
+          }, 1800);
+        }
+      } catch {
+        if (Date.now() - startTime > 90000) {
+          clearInterval(checkInterval);
+          setUpdatePhase('error');
+          setUpdateError('Reconnection timed out. Please check your VPS terminal.');
+        }
+      }
+    }, 2000);
   };
 
   const handleCopyUpdateCommand = async () => {
@@ -723,7 +808,11 @@ export const SettingsPage: React.FC = () => {
             justifyContent: 'center',
             padding: '20px',
           }}
-          onClick={() => setShowUpdateModal(false)}
+          onClick={() => {
+            if (updatePhase === 'idle' || updatePhase === 'completed' || updatePhase === 'error') {
+              setShowUpdateModal(false);
+            }
+          }}
         >
           <div
             style={{
@@ -731,12 +820,13 @@ export const SettingsPage: React.FC = () => {
               border: '1px solid var(--border-subtle, #27272a)',
               borderRadius: '12px',
               padding: '24px',
-              maxWidth: '520px',
+              maxWidth: '560px',
               width: '100%',
               boxShadow: '0 20px 40px rgba(0, 0, 0, 0.6)',
             }}
             onClick={(e) => e.stopPropagation()}
           >
+            {/* Modal Header */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '14px' }}>
               <span
                 style={{
@@ -746,67 +836,254 @@ export const SettingsPage: React.FC = () => {
                   width: '32px',
                   height: '32px',
                   borderRadius: '8px',
-                  background: 'rgba(48, 209, 88, 0.15)',
-                  color: '#30d158',
+                  background: updatePhase === 'error' ? 'rgba(255, 69, 58, 0.15)' : 'rgba(48, 209, 88, 0.15)',
+                  color: updatePhase === 'error' ? '#ff453a' : '#30d158',
                   fontSize: '16px',
                 }}
               >
-                ✓
+                {updatePhase === 'running' || updatePhase === 'reconnecting' ? '⚡' : (updatePhase === 'error' ? '!' : '✓')}
               </span>
               <div>
                 <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)' }}>
-                  Domain Routing Saved
+                  {updatePhase === 'running' && 'Updating Server & Routing...'}
+                  {updatePhase === 'reconnecting' && 'Restarting & Reconnecting...'}
+                  {updatePhase === 'completed' && 'Update Applied Successfully!'}
+                  {updatePhase === 'error' && 'Update Notice'}
+                  {updatePhase === 'idle' && 'Domain Routing Saved'}
                 </h3>
                 <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
-                  Synchronized to SQLite and /etc/ownmediahost/ownmediahost.env
+                  {updatePhase === 'running' && 'Isolated background root execution via systemd'}
+                  {updatePhase === 'reconnecting' && 'Pinging /health until backend is ready'}
+                  {updatePhase === 'completed' && 'Dashboard reloading automatically...'}
+                  {updatePhase === 'error' && (updateError || 'An error occurred during update')}
+                  {updatePhase === 'idle' && 'Synchronized to SQLite and /etc/ownmediahost/ownmediahost.env'}
                 </span>
               </div>
             </div>
 
-            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '16px' }}>
-              Your domain configuration has been saved. To apply Caddy reverse-proxy routing, issue new SSL certificates, and update the frontend build on your server, copy and run this command on your VPS:
-            </p>
+            {/* Modal Content by Phase */}
+            {updatePhase === 'idle' && (
+              <>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.5, marginBottom: '16px' }}>
+                  Your domain settings have been saved. To apply Caddy reverse-proxy routing, request SSL certificates, and update the frontend build, you can run the update directly now without opening a terminal:
+                </p>
 
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                background: 'var(--bg-tertiary, #09090b)',
-                border: '1px solid var(--border-subtle, #27272a)',
-                borderRadius: '8px',
-                padding: '10px 14px',
-                marginBottom: '20px',
-                gap: '8px',
-              }}
-            >
-              <code style={{ fontSize: '13px', color: '#38bdf8', fontFamily: 'monospace', wordBreak: 'break-all' }}>
-                sudo bash /opt/ownmediahost/scripts/update.sh
-              </code>
-              <button
-                type="button"
-                onClick={handleCopyUpdateCommand}
-                className="btn btn-secondary press-scale"
-                style={{
-                  fontSize: '11px',
-                  padding: '5px 12px',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {copiedUpdateCmd ? 'Copied!' : 'Copy'}
-              </button>
-            </div>
+                {/* 1-Click Direct Update Button */}
+                <button
+                  type="button"
+                  onClick={handleTriggerUpdate}
+                  className="btn press-scale"
+                  style={{
+                    width: '100%',
+                    padding: '12px 18px',
+                    fontSize: '14px',
+                    fontWeight: 600,
+                    color: '#fff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    marginBottom: '14px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  ⚡ Apply & Run Update Now (1-Click)
+                </button>
 
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button
-                type="button"
-                onClick={() => setShowUpdateModal(false)}
-                className="btn btn-primary press-scale"
-                style={{ padding: '8px 20px', fontSize: '13px', fontWeight: 600 }}
-              >
-                Done
-              </button>
-            </div>
+                <div style={{ textAlign: 'center', margin: '12px 0', fontSize: '11px', color: 'var(--text-tertiary)' }}>
+                  — OR RUN MANUALLY IN VPS TERMINAL —
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: 'var(--bg-tertiary, #09090b)',
+                    border: '1px solid var(--border-subtle, #27272a)',
+                    borderRadius: '8px',
+                    padding: '10px 14px',
+                    marginBottom: '18px',
+                    gap: '8px',
+                  }}
+                >
+                  <code style={{ fontSize: '12px', color: '#38bdf8', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+                    sudo bash /opt/ownmediahost/scripts/update.sh
+                  </code>
+                  <button
+                    type="button"
+                    onClick={handleCopyUpdateCommand}
+                    className="btn btn-secondary press-scale"
+                    style={{
+                      fontSize: '11px',
+                      padding: '5px 12px',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {copiedUpdateCmd ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowUpdateModal(false)}
+                    className="btn btn-secondary press-scale"
+                    style={{ padding: '8px 18px', fontSize: '12px' }}
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              </>
+            )}
+
+            {updatePhase === 'running' && (
+              <>
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '10px' }}>
+                  Server update in progress. The updater is synchronizing Caddy virtual hosts and building dashboard assets:
+                </p>
+                <pre
+                  ref={logTerminalRef}
+                  style={{
+                    background: '#09090b',
+                    color: '#38bdf8',
+                    border: '1px solid var(--border-subtle, #27272a)',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    maxHeight: '220px',
+                    overflowY: 'auto',
+                    fontSize: '11px',
+                    fontFamily: 'monospace',
+                    whiteSpace: 'pre-wrap',
+                    wordBreak: 'break-all',
+                    lineHeight: 1.4,
+                    marginBottom: '12px',
+                  }}
+                >
+                  {updateLogs || 'Waiting for first log line...'}
+                </pre>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-tertiary)', fontSize: '11px' }}>
+                  <span style={{ display: 'inline-block', width: '8px', height: '8px', borderRadius: '50%', background: '#30d158', animation: 'pulse 1.5s infinite' }} />
+                  Please keep this tab open. Services will automatically restart when finished.
+                </div>
+              </>
+            )}
+
+            {updatePhase === 'reconnecting' && (
+              <div style={{ padding: '20px 0', textAlign: 'center' }}>
+                <div
+                  style={{
+                    width: '36px',
+                    height: '36px',
+                    margin: '0 auto 14px',
+                    borderRadius: '50%',
+                    border: '3px solid rgba(99, 102, 241, 0.2)',
+                    borderTopColor: '#6366f1',
+                    animation: 'spin 1s linear infinite',
+                  }}
+                />
+                <p style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                  Restarting services & reconnecting...
+                </p>
+                <p style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                  Pinging <code>/health</code> endpoint. Your browser will reload as soon as OwnMediaHost comes online.
+                </p>
+              </div>
+            )}
+
+            {updatePhase === 'completed' && (
+              <div style={{ padding: '20px 0', textAlign: 'center' }}>
+                <div
+                  style={{
+                    width: '40px',
+                    height: '40px',
+                    margin: '0 auto 14px',
+                    borderRadius: '50%',
+                    background: 'rgba(48, 209, 88, 0.15)',
+                    color: '#30d158',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '20px',
+                  }}
+                >
+                  ✓
+                </div>
+                <p style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)', marginBottom: '4px' }}>
+                  Server Update Applied!
+                </p>
+                <p style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                  New domain routing and SSL certificates are active. Reloading dashboard now...
+                </p>
+              </div>
+            )}
+
+            {updatePhase === 'error' && (
+              <>
+                <p style={{ fontSize: '13px', color: '#ff453a', marginBottom: '12px' }}>
+                  {updateError || 'An error occurred while communicating with the update watcher.'}
+                </p>
+                {updateLogs && (
+                  <pre
+                    style={{
+                      background: '#09090b',
+                      color: '#f87171',
+                      border: '1px solid var(--border-subtle, #27272a)',
+                      padding: '10px',
+                      borderRadius: '6px',
+                      maxHeight: '140px',
+                      overflowY: 'auto',
+                      fontSize: '11px',
+                      fontFamily: 'monospace',
+                      marginBottom: '14px',
+                    }}
+                  >
+                    {updateLogs}
+                  </pre>
+                )}
+                <p style={{ fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '14px' }}>
+                  You can always run the update manually in your VPS terminal:
+                </p>
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    background: 'var(--bg-tertiary, #09090b)',
+                    border: '1px solid var(--border-subtle, #27272a)',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    marginBottom: '16px',
+                    gap: '8px',
+                  }}
+                >
+                  <code style={{ fontSize: '12px', color: '#38bdf8', fontFamily: 'monospace' }}>
+                    sudo bash /opt/ownmediahost/scripts/update.sh
+                  </code>
+                  <button
+                    type="button"
+                    onClick={handleCopyUpdateCommand}
+                    className="btn btn-secondary press-scale"
+                    style={{ fontSize: '11px', padding: '4px 10px' }}
+                  >
+                    {copiedUpdateCmd ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowUpdateModal(false)}
+                    className="btn btn-primary press-scale"
+                    style={{ padding: '8px 18px', fontSize: '12px' }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

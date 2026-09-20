@@ -7,6 +7,7 @@ pub mod folders;
 pub mod keys;
 pub mod settings;
 pub mod storage_stats;
+pub mod system;
 pub mod tags;
 
 use axum::{
@@ -58,7 +59,8 @@ pub fn create_router(
         .nest("/storage", storage_stats::router(pool.clone(), storage.clone()))
         .nest("/activity", activity::router(pool.clone()))
         .nest("/settings", settings::router(pool.clone(), settings_cache))
-        .nest("/aliases", aliases::crud_router(pool.clone(), storage.clone(), config.clone()));
+        .nest("/aliases", aliases::crud_router(pool.clone(), storage.clone(), config.clone()))
+        .nest("/system", system::router(config.clone()));
 
     let delivery_routes = delivery::router(pool.clone(), storage.clone(), config.clone());
     let alias_routes = aliases::delivery_router(pool.clone(), storage.clone(), config.clone());

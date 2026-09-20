@@ -505,4 +505,44 @@ as_root systemctl enable ownmediahost
 as_root systemctl restart ownmediahost
 as_root systemctl status ownmediahost --no-pager -n 5
 
+# Ensure background update trigger watcher is active
+update_storage="${MEDIA_ROOT:-/var/lib/ownmediahost/storage}"
+trigger_file="${update_storage}/update.trigger"
+log_file="${update_storage}/update.log"
+as_root touch "${trigger_file}" "${log_file}" 2>/dev/null || true
+as_root chown -R ownmediahost:ownmediahost "${update_storage}" 2>/dev/null || true
+
+as_root tee /etc/systemd/system/ownmediahost-update.path >/dev/null << EOF
+[Unit]
+Description=OwnMediaHost Web UI Update Trigger Watcher
+Documentation=https://github.com/nourddinak/OwnMediaHost
+After=network.target
+
+[Path]
+PathModified=${trigger_file}
+Unit=ownmediahost-update.service
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+as_root tee /etc/systemd/system/ownmediahost-update.service >/dev/null << EOF
+[Unit]
+Description=OwnMediaHost Server Background Updater
+Documentation=https://github.com/nourddinak/OwnMediaHost
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/ownmediahost
+ExecStartPre=/bin/rm -f ${trigger_file}
+ExecStart=/bin/bash /opt/ownmediahost/scripts/update.sh
+StandardOutput=append:${log_file}
+StandardError=append:${log_file}
+EOF
+
+as_root systemctl daemon-reload
+as_root systemctl enable --now ownmediahost-update.path 2>/dev/null || true
+
 log_success "OwnMediaHost successfully updated and running!"

@@ -317,6 +317,8 @@ export const api = {
   getSettings: () => request<Record<string, string>>('/settings'),
   updateSettings: (settings: Record<string, string>) =>
     request('/settings', { method: 'PATCH', body: JSON.stringify({ settings }) }),
+  triggerUpdate: () => request('/system/trigger-update', { method: 'POST' }),
+  getUpdateStatus: () => request<{ running: boolean; success: boolean; log: string }>('/system/update-status'),
   getHealth: async (): Promise<{ status: string }> => {
     try {
       const res = await fetch('/health', { cache: 'no-store' });

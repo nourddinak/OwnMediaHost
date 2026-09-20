@@ -980,6 +980,46 @@ EOF
     as_root systemctl enable ownmediahost
     as_root systemctl restart ownmediahost
     log_success "OwnMediaHost systemd service enabled and started."
+
+    # Provision background update trigger watcher (allows 1-click update from webapp safely)
+    local trigger_file="${STORAGE_DIR}/update.trigger"
+    local log_file="${STORAGE_DIR}/update.log"
+    as_root touch "${trigger_file}" "${log_file}" 2>/dev/null || true
+    as_root chown -R ownmediahost:ownmediahost "${STORAGE_DIR}" 2>/dev/null || true
+
+    as_root tee /etc/systemd/system/ownmediahost-update.path >/dev/null << EOF
+[Unit]
+Description=OwnMediaHost Web UI Update Trigger Watcher
+Documentation=https://github.com/nourddinak/OwnMediaHost
+After=network.target
+
+[Path]
+PathModified=${trigger_file}
+Unit=ownmediahost-update.service
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    as_root tee /etc/systemd/system/ownmediahost-update.service >/dev/null << EOF
+[Unit]
+Description=OwnMediaHost Server Background Updater
+Documentation=https://github.com/nourddinak/OwnMediaHost
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/ownmediahost
+ExecStartPre=/bin/rm -f ${trigger_file}
+ExecStart=/bin/bash /opt/ownmediahost/scripts/update.sh
+StandardOutput=append:${log_file}
+StandardError=append:${log_file}
+EOF
+
+    as_root systemctl daemon-reload
+    as_root systemctl enable --now ownmediahost-update.path 2>/dev/null || true
+    log_success "Background 1-click update watcher enabled (ownmediahost-update.path)."
 }
 
 # --- Caddyfile Configuration ---
