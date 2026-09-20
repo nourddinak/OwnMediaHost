@@ -70,7 +70,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       try {
         const update = await api.checkUpdate();
         if (mounted && update) {
-          setHasUpdate(update.has_update);
+          setHasUpdate(Boolean(update.has_update && update.release_ready));
         }
       } catch {
         // offline or unconfigured
@@ -341,11 +341,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                           position: 'absolute',
                           top: '-2px',
                           right: '-2px',
-                          width: '7px',
-                          height: '7px',
+                          width: '6px',
+                          height: '6px',
                           borderRadius: '50%',
-                          background: '#ff9f0a',
-                          boxShadow: '0 0 6px #ff9f0a',
+                          background: '#ffffff',
                         }}
                       />
                     )}
@@ -357,10 +356,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         fontSize: '10px',
                         fontWeight: 600,
                         padding: '1px 6px',
-                        borderRadius: '8px',
-                        background: 'rgba(255, 159, 10, 0.2)',
-                        color: '#ff9f0a',
-                        border: '1px solid rgba(255, 159, 10, 0.4)',
+                        borderRadius: '6px',
+                        background: 'rgba(255, 255, 255, 0.12)',
+                        color: '#ffffff',
+                        border: '1px solid rgba(255, 255, 255, 0.18)',
                       }}
                     >
                       {item.badge}

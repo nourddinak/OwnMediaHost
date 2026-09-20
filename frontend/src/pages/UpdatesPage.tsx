@@ -28,10 +28,10 @@ export const UpdatesPage: React.FC = () => {
       const data = await api.checkUpdate(force);
       setUpdateInfo(data);
       if (force) {
-        if (data.has_update) {
-          toast('New update ready for installation!', 'success');
-        } else if (data.is_building) {
-          toast('GitHub Actions is currently building the new release.', 'info');
+        if (data.has_update && data.release_ready) {
+          toast('New update verified and ready for installation!', 'success');
+        } else if (data.is_building || !data.release_ready) {
+          toast('GitHub Actions is compiling release assets. Please wait.', 'info');
         } else {
           toast('Your server is up to date!', 'info');
         }
@@ -89,6 +89,12 @@ export const UpdatesPage: React.FC = () => {
   };
 
   const handleTriggerUpdate = async () => {
+    // Strict client-side gate: Never trigger update while release is still building in CI
+    if (!updateInfo?.release_ready || !updateInfo?.has_update) {
+      toast('Cannot update while release is still building. Please wait for GitHub Actions to complete.', 'error');
+      return;
+    }
+
     setUpdatePhase('running');
     setShowTerminalOverlay(true);
     setUpdateLogs('⚡ Signaling systemd to execute fast server update...\n');
@@ -148,6 +154,10 @@ export const UpdatesPage: React.FC = () => {
     }
   };
 
+  // Strictly gate update action: ONLY true when GitHub Actions release assets match main AND differ from installed
+  const isActionableUpdate = Boolean(updateInfo?.has_update && updateInfo?.release_ready);
+  const isCiBuilding = Boolean(updateInfo?.is_building || (!updateInfo?.release_ready && updateInfo?.latest_commit !== updateInfo?.current_commit));
+
   return (
     <div className="updates-container">
       {/* Header Row */}
@@ -197,41 +207,25 @@ export const UpdatesPage: React.FC = () => {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          {/* Main Status Hero Card */}
-          <div
-            className={`hero-card ${
-              updateInfo?.has_update
-                ? 'hero-update'
-                : updateInfo?.is_building
-                ? 'hero-building'
-                : 'hero-uptodate'
-            }`}
-          >
+          {/* Main Status Hero Card - Clean Muted Slate (Zero Neon) */}
+          <div className="hero-card">
             <div className="hero-content-wrapper">
-              <div
-                className={`hero-icon-box ${
-                  updateInfo?.has_update
-                    ? 'icon-update'
-                    : updateInfo?.is_building
-                    ? 'icon-building'
-                    : 'icon-uptodate'
-                }`}
-              >
-                {updateInfo?.has_update ? (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="12" />
-                    <line x1="12" y1="16" x2="12.01" y2="16" />
+              <div className="hero-icon-box">
+                {isActionableUpdate ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
                   </svg>
-                ) : updateInfo?.is_building ? (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 3s linear infinite' }}>
+                ) : isCiBuilding ? (
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 3s linear infinite' }}>
                     <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
                     <path d="M3 3v5h5" />
                     <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
                     <path d="M16 21h5v-5" />
                   </svg>
                 ) : (
-                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#30d158" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M20 6 9 17l-5-5" />
                   </svg>
                 )}
@@ -240,39 +234,40 @@ export const UpdatesPage: React.FC = () => {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                   <h2 style={{ fontSize: '16px', fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>
-                    {updateInfo?.has_update
-                      ? 'New Update Available!'
-                      : updateInfo?.is_building
+                    {isActionableUpdate
+                      ? 'New Version Ready to Install'
+                      : isCiBuilding
                       ? 'Release Build in Progress'
                       : 'Your Server is Up to Date'}
                   </h2>
                   <span
                     className={`badge-pill ${
-                      updateInfo?.has_update
-                        ? 'badge-update'
-                        : updateInfo?.is_building
+                      isActionableUpdate
+                        ? 'badge-ready'
+                        : isCiBuilding
                         ? 'badge-building'
                         : 'badge-uptodate'
                     }`}
                   >
-                    {updateInfo?.has_update
-                      ? 'READY TO INSTALL'
-                      : updateInfo?.is_building
+                    {isActionableUpdate
+                      ? 'UPDATE READY'
+                      : isCiBuilding
                       ? 'BUILDING IN CI/CD'
                       : 'LATEST'}
                   </span>
                 </div>
                 <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)', lineHeight: 1.4 }}>
-                  {updateInfo?.has_update
-                    ? `Release ${updateInfo.release_short_commit || updateInfo.latest_short_commit} has finished compiling and is ready for 1-click install.`
-                    : updateInfo?.is_building
-                    ? `Commit ${updateInfo.latest_short_commit} was pushed to main. GitHub Actions is compiling release binaries (~2 min).`
+                  {isActionableUpdate
+                    ? `Release ${updateInfo?.release_short_commit || updateInfo?.latest_short_commit} has finished compiling and is verified.`
+                    : isCiBuilding
+                    ? `Commit ${updateInfo?.latest_short_commit} was pushed to main. GitHub Actions is compiling release binaries (~2 min). The update button will unlock once published.`
                     : `Running commit ${updateInfo?.current_short_commit || 'latest'} • All services are synchronized.`}
                 </p>
               </div>
             </div>
 
-            {updateInfo?.has_update ? (
+            {/* ONLY show update button when release is 100% finished and verified */}
+            {isActionableUpdate ? (
               <button
                 onClick={handleTriggerUpdate}
                 disabled={updatePhase === 'running' || updatePhase === 'reconnecting'}
@@ -285,11 +280,11 @@ export const UpdatesPage: React.FC = () => {
                 </svg>
                 {updatePhase === 'running' || updatePhase === 'reconnecting' ? 'Updating Server...' : 'Update Server Now (~5s)'}
               </button>
-            ) : updateInfo?.is_building ? (
-              <button disabled className="btn-building-action">
-                <div className="spinner" style={{ width: '13px', height: '13px' }} />
-                Building Release... (~2m)
-              </button>
+            ) : isCiBuilding ? (
+              <div className="tag-building-status">
+                <div className="spinner" style={{ width: '12px', height: '12px' }} />
+                <span>Compiling Release... (~2m)</span>
+              </div>
             ) : null}
           </div>
 
@@ -347,16 +342,16 @@ export const UpdatesPage: React.FC = () => {
                     style={{
                       color: updateInfo?.release_ready
                         ? 'var(--accent-green)'
-                        : updateInfo?.is_building
-                        ? 'var(--accent-blue)'
-                        : 'var(--accent-orange)',
-                      fontWeight: 600,
+                        : isCiBuilding
+                        ? 'var(--text-secondary)'
+                        : 'var(--text-tertiary)',
+                      fontWeight: 500,
                       fontSize: '12px',
                     }}
                   >
                     {updateInfo?.release_ready
                       ? '✓ Binaries Ready'
-                      : updateInfo?.is_building
+                      : isCiBuilding
                       ? '⏳ Compiling in CI/CD...'
                       : 'Pending Build'}
                   </span>
@@ -432,19 +427,19 @@ export const UpdatesPage: React.FC = () => {
         </div>
       )}
 
-      {/* Floating Active Update Pill (When minimized during active update) */}
+      {/* Floating Active Update Pill (When minimized during active update - Zero Neon) */}
       {updatePhase !== 'idle' && !showTerminalOverlay && (
         <div
           className="floating-update-pill press-scale"
           onClick={() => setShowTerminalOverlay(true)}
         >
           <div className="pill-pulse-dot" />
-          <span style={{ fontWeight: 600, fontSize: '12px' }}>
+          <span style={{ fontWeight: 500, fontSize: '12px' }}>
             {updatePhase === 'completed'
-              ? 'Update Completed!'
+              ? 'Update Completed'
               : updatePhase === 'error'
               ? 'Update Error'
-              : 'Server Update in Progress...'}
+              : 'Server Update Running...'}
           </span>
           <span className="pill-view-action">View Logs ↗</span>
         </div>
@@ -471,7 +466,7 @@ export const UpdatesPage: React.FC = () => {
                       ? 'dot-green'
                       : updatePhase === 'error'
                       ? 'dot-red'
-                      : 'dot-orange'
+                      : 'dot-neutral'
                   }`}
                 />
                 <div>
@@ -491,7 +486,7 @@ export const UpdatesPage: React.FC = () => {
                       ? 'badge-uptodate'
                       : updatePhase === 'error'
                       ? 'badge-error'
-                      : 'badge-update'
+                      : 'badge-ready'
                   }`}
                 >
                   {updatePhase.toUpperCase()}
@@ -533,11 +528,11 @@ export const UpdatesPage: React.FC = () => {
             <div className="overlay-terminal-box">
               <div className="terminal-topbar">
                 <div style={{ display: 'flex', gap: '6px' }}>
-                  <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#ff5f56' }} />
-                  <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#ffbd2e' }} />
-                  <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#27c93f' }} />
+                  <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#3a3a3c' }} />
+                  <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#3a3a3c' }} />
+                  <div style={{ width: '9px', height: '9px', borderRadius: '50%', background: '#3a3a3c' }} />
                 </div>
-                <span style={{ fontSize: '11px', color: '#8b949e', fontFamily: 'monospace' }}>
+                <span style={{ fontSize: '11px', color: '#8e8e93', fontFamily: 'monospace' }}>
                   /var/log/ownmediahost/update.log
                 </span>
                 <button
@@ -733,7 +728,7 @@ export const UpdatesPage: React.FC = () => {
         </div>
       )}
 
-      {/* Mobile-First Responsive Styles */}
+      {/* Clean Apple Obsidian Styles - Zero Neon */}
       <style>{`
         .updates-container {
           max-width: 960px;
@@ -784,30 +779,21 @@ export const UpdatesPage: React.FC = () => {
           flex-shrink: 0;
         }
 
+        .updates-check-btn:hover {
+          background: var(--bg-hover);
+        }
+
+        /* Hero Status Card - Muted Slate */
         .hero-card {
-          border-radius: 14px;
-          padding: 22px;
+          background: var(--bg-secondary);
+          border: 1px solid var(--border-subtle);
+          border-radius: 12px;
+          padding: 20px 22px;
           display: flex;
           align-items: center;
           justify-content: space-between;
           flex-wrap: wrap;
           gap: 16px;
-          transition: all 0.2s ease;
-        }
-
-        .hero-uptodate {
-          background: linear-gradient(135deg, rgba(48, 209, 88, 0.1), rgba(0, 122, 255, 0.03));
-          border: 1px solid rgba(48, 209, 88, 0.25);
-        }
-
-        .hero-update {
-          background: linear-gradient(135deg, rgba(255, 159, 10, 0.14), rgba(255, 100, 0, 0.05));
-          border: 1px solid rgba(255, 159, 10, 0.35);
-        }
-
-        .hero-building {
-          background: linear-gradient(135deg, rgba(10, 132, 255, 0.12), rgba(255, 159, 10, 0.06));
-          border: 1px solid rgba(10, 132, 255, 0.3);
         }
 
         .hero-content-wrapper {
@@ -819,61 +805,55 @@ export const UpdatesPage: React.FC = () => {
         }
 
         .hero-icon-box {
-          width: 44px;
-          height: 44px;
-          border-radius: 12px;
+          width: 40px;
+          height: 40px;
+          border-radius: 10px;
+          background: rgba(255, 255, 255, 0.05);
+          border: 1px solid rgba(255, 255, 255, 0.08);
+          color: var(--text-primary);
           display: flex;
           align-items: center;
           justify-content: center;
           flex-shrink: 0;
         }
 
-        .icon-uptodate {
-          background: rgba(48, 209, 88, 0.2);
-          color: #30d158;
-        }
-
-        .icon-update {
-          background: rgba(255, 159, 10, 0.2);
-          color: #ff9f0a;
-        }
-
-        .icon-building {
-          background: rgba(10, 132, 255, 0.2);
-          color: #0a84ff;
-        }
-
+        /* Clean Badges (Zero Neon) */
         .badge-pill {
           font-size: 10px;
-          font-weight: 700;
-          letter-spacing: 0.04em;
+          font-weight: 600;
+          letter-spacing: 0.03em;
           padding: 2px 7px;
-          border-radius: 8px;
+          border-radius: 6px;
         }
 
         .badge-uptodate {
-          background: rgba(48, 209, 88, 0.2);
+          background: rgba(48, 209, 88, 0.12);
           color: #30d158;
+          border: 1px solid rgba(48, 209, 88, 0.2);
         }
 
-        .badge-update {
-          background: rgba(255, 159, 10, 0.2);
-          color: #ff9f0a;
+        .badge-ready {
+          background: rgba(255, 255, 255, 0.12);
+          color: #ffffff;
+          border: 1px solid rgba(255, 255, 255, 0.2);
         }
 
         .badge-building {
-          background: rgba(10, 132, 255, 0.2);
-          color: #0a84ff;
+          background: rgba(255, 255, 255, 0.06);
+          color: var(--text-secondary);
+          border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         .badge-error {
-          background: rgba(255, 69, 58, 0.2);
+          background: rgba(255, 69, 58, 0.12);
           color: #ff453a;
+          border: 1px solid rgba(255, 69, 58, 0.2);
         }
 
+        /* Clean White Action Button (Zero Neon Glow) */
         .btn-update-action {
-          background: #ff9f0a;
-          color: #000;
+          background: #ffffff;
+          color: #000000;
           border: none;
           border-radius: 8px;
           padding: 10px 18px;
@@ -884,22 +864,24 @@ export const UpdatesPage: React.FC = () => {
           align-items: center;
           justify-content: center;
           gap: 8px;
-          box-shadow: 0 4px 12px rgba(255, 159, 10, 0.25);
+          transition: opacity 0.15s ease;
           flex-shrink: 0;
         }
 
-        .btn-building-action {
+        .btn-update-action:hover {
+          opacity: 0.9;
+        }
+
+        .tag-building-status {
           background: rgba(255, 255, 255, 0.05);
-          color: var(--text-tertiary);
-          border: 1px solid var(--border-subtle);
+          color: var(--text-secondary);
+          border: 1px solid rgba(255, 255, 255, 0.08);
           border-radius: 8px;
-          padding: 10px 16px;
+          padding: 8px 14px;
+          font-size: 12px;
           font-weight: 500;
-          font-size: 13px;
-          cursor: not-allowed;
           display: inline-flex;
           align-items: center;
-          justify-content: center;
           gap: 8px;
           flex-shrink: 0;
         }
@@ -964,14 +946,15 @@ export const UpdatesPage: React.FC = () => {
         }
 
         .status-link {
-          color: var(--accent-blue);
-          text-decoration: none;
+          color: var(--text-primary);
+          text-decoration: underline;
+          text-underline-offset: 2px;
           font-size: 13px;
         }
 
         .changelog-trigger {
           cursor: pointer;
-          transition: border-color 0.15s ease, transform 0.15s ease;
+          transition: border-color 0.15s ease;
         }
 
         .changelog-trigger:hover {
@@ -980,7 +963,7 @@ export const UpdatesPage: React.FC = () => {
 
         .view-details-link {
           font-size: 12px;
-          color: var(--accent-blue);
+          color: var(--text-secondary);
           font-weight: 500;
         }
 
@@ -1071,16 +1054,14 @@ export const UpdatesPage: React.FC = () => {
           cursor: pointer;
         }
 
-        /* Floating Active Pill */
+        /* Floating Active Pill - Neutral Obsidian */
         .floating-update-pill {
           position: fixed;
           bottom: 24px;
           left: 50%;
           transform: translateX(-50%);
-          background: rgba(22, 22, 24, 0.95);
-          backdrop-filter: blur(16px);
-          -webkit-backdrop-filter: blur(16px);
-          border: 1px solid rgba(255, 159, 10, 0.4);
+          background: #1c1c1e;
+          border: 1px solid rgba(255, 255, 255, 0.15);
           box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
           border-radius: 9999px;
           padding: 8px 18px;
@@ -1093,27 +1074,25 @@ export const UpdatesPage: React.FC = () => {
         }
 
         .pill-pulse-dot {
-          width: 8px;
-          height: 8px;
+          width: 7px;
+          height: 7px;
           border-radius: 50%;
-          background: #ff9f0a;
-          box-shadow: 0 0 8px #ff9f0a;
-          animation: pulse 1.5s infinite;
+          background: #ffffff;
         }
 
         .pill-view-action {
           font-size: 11px;
-          color: var(--accent-blue);
-          font-weight: 600;
+          color: var(--text-secondary);
+          font-weight: 500;
         }
 
         /* Modals & Overlays */
         .overlay-backdrop {
           position: fixed;
           inset: 0;
-          background: rgba(0, 0, 0, 0.7);
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
+          background: rgba(0, 0, 0, 0.75);
+          backdrop-filter: blur(8px);
+          -webkit-backdrop-filter: blur(8px);
           z-index: 100;
           display: flex;
           align-items: center;
@@ -1123,14 +1102,14 @@ export const UpdatesPage: React.FC = () => {
         }
 
         .overlay-sheet {
-          background: #121214;
+          background: #141416;
           border: 1px solid var(--border-medium);
-          border-radius: 16px;
+          border-radius: 14px;
           width: 100%;
           max-width: 620px;
           max-height: 90vh;
           overflow-y: auto;
-          box-shadow: var(--shadow-lg);
+          box-shadow: 0 16px 40px rgba(0, 0, 0, 0.7);
           display: flex;
           flex-direction: column;
           position: relative;
@@ -1172,25 +1151,21 @@ export const UpdatesPage: React.FC = () => {
         }
 
         .overlay-status-dot {
-          width: 10px;
-          height: 10px;
+          width: 8px;
+          height: 8px;
           border-radius: 50%;
         }
 
         .dot-green {
           background: #30d158;
-          box-shadow: 0 0 8px #30d158;
         }
 
-        .dot-orange {
-          background: #ff9f0a;
-          box-shadow: 0 0 8px #ff9f0a;
-          animation: pulse 1.5s infinite;
+        .dot-neutral {
+          background: #ffffff;
         }
 
         .dot-red {
           background: #ff453a;
-          box-shadow: 0 0 8px #ff453a;
         }
 
         .overlay-stepper {
@@ -1219,17 +1194,17 @@ export const UpdatesPage: React.FC = () => {
           width: 18px;
           height: 18px;
           border-radius: 50%;
-          background: rgba(255, 255, 255, 0.1);
+          background: rgba(255, 255, 255, 0.08);
           display: flex;
           align-items: center;
           justify-content: center;
           font-size: 10px;
-          font-weight: 700;
+          font-weight: 600;
         }
 
         .step-item.step-active .step-num {
-          background: #0a84ff;
-          color: #fff;
+          background: #ffffff;
+          color: #000000;
         }
 
         .step-line {
@@ -1241,16 +1216,16 @@ export const UpdatesPage: React.FC = () => {
 
         .overlay-terminal-box {
           margin: 16px 20px;
-          background: #090a0d;
-          border: 1px solid #2d3139;
-          border-radius: 10px;
+          background: #090a0c;
+          border: 1px solid #23252b;
+          border-radius: 8px;
           overflow: hidden;
         }
 
         .terminal-topbar {
           padding: 8px 12px;
-          background: #14171d;
-          border-bottom: 1px solid #2d3139;
+          background: #111216;
+          border-bottom: 1px solid #23252b;
           display: flex;
           align-items: center;
           justify-content: space-between;
@@ -1258,7 +1233,7 @@ export const UpdatesPage: React.FC = () => {
 
         .terminal-copy-btn {
           background: transparent;
-          color: #8b949e;
+          color: var(--text-tertiary);
           font-size: 11px;
           padding: 2px 6px;
           border-radius: 4px;
@@ -1266,7 +1241,7 @@ export const UpdatesPage: React.FC = () => {
         }
 
         .terminal-copy-btn:hover {
-          color: #c9d1d9;
+          color: var(--text-primary);
           background: rgba(255, 255, 255, 0.06);
         }
 
@@ -1285,8 +1260,8 @@ export const UpdatesPage: React.FC = () => {
         .overlay-error-box {
           margin: 0 20px 14px 20px;
           padding: 12px;
-          background: rgba(255, 69, 58, 0.15);
-          border: 1px solid rgba(255, 69, 58, 0.3);
+          background: rgba(255, 69, 58, 0.1);
+          border: 1px solid rgba(255, 69, 58, 0.2);
           border-radius: 8px;
           color: #ff453a;
           font-size: 13px;
@@ -1318,8 +1293,8 @@ export const UpdatesPage: React.FC = () => {
           font-weight: 700;
           padding: 2px 6px;
           border-radius: 4px;
-          background: rgba(10, 132, 255, 0.2);
-          color: #0a84ff;
+          background: rgba(255, 255, 255, 0.1);
+          color: var(--text-primary);
         }
 
         .cli-code-block {
@@ -1372,8 +1347,9 @@ export const UpdatesPage: React.FC = () => {
             align-items: flex-start;
           }
 
-          .btn-update-action, .btn-building-action {
+          .btn-update-action, .tag-building-status {
             width: 100%;
+            justify-content: center;
           }
 
           .details-card {
@@ -1394,7 +1370,7 @@ export const UpdatesPage: React.FC = () => {
           }
 
           .overlay-sheet {
-            border-radius: 20px 20px 0 0;
+            border-radius: 18px 18px 0 0;
             max-height: 85vh;
             animation: slideUpBottom 0.25s cubic-bezier(0.16, 1, 0.3, 1);
           }
@@ -1434,7 +1410,7 @@ export const UpdatesPage: React.FC = () => {
         }
 
         @keyframes scaleUp {
-          from { transform: scale(0.95); opacity: 0; }
+          from { transform: scale(0.96); opacity: 0; }
           to { transform: scale(1); opacity: 1; }
         }
 
@@ -1446,11 +1422,6 @@ export const UpdatesPage: React.FC = () => {
         @keyframes floatBounce {
           from { transform: translate(-50%, 20px); opacity: 0; }
           to { transform: translate(-50%, 0); opacity: 1; }
-        }
-
-        @keyframes pulse {
-          0%, 100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.5; transform: scale(0.9); }
         }
       `}</style>
     </div>

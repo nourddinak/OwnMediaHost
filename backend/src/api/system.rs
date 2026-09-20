@@ -293,19 +293,18 @@ async fn check_for_updates(
         !current_commit.starts_with(&latest_short_commit) &&
         !latest_commit.starts_with(&current_short_commit);
 
-    // A newer release is published and available for download than what is currently installed
-    let newer_release_available = !release_commit.is_empty() &&
-        current_commit != release_commit &&
-        !current_commit.starts_with(&release_short_commit) &&
-        !release_commit.starts_with(&current_short_commit);
-
     // Is CI/CD currently compiling and packaging?
     // If a new commit is on main, but the release doesn't have it yet, CI is actively building.
     let is_building = new_commit_on_main && !release_ready;
 
-    // The user should ONLY receive an update notification and be allowed to install
-    // when a newer release is actually built, published, and downloadable!
-    let has_update = newer_release_available;
+    // The user can ONLY update when the new release build has 100% finished,
+    // published release assets, and release_ready is verified!
+    let has_update = release_ready &&
+        new_commit_on_main &&
+        !release_commit.is_empty() &&
+        current_commit != release_commit &&
+        !current_commit.starts_with(&release_short_commit) &&
+        !release_commit.starts_with(&current_short_commit);
 
     let checked_at = chrono::Utc::now().to_rfc3339();
 
@@ -340,6 +339,18 @@ async fn trigger_update(
     State(state): State<SystemState>,
     RequireAdmin(_admin): RequireAdmin,
 ) -> Result<impl IntoResponse, AppError> {
+    // Safety check: Prevent updating while release is still compiling in CI/CD
+    {
+        let cache = state.update_cache.read().await;
+        if let Some((_, ref info)) = *cache {
+            if info.is_building || (!info.release_ready && info.latest_commit != info.current_commit) {
+                return Err(AppError::BadRequest(
+                    "Cannot trigger update: GitHub Actions release build is still in progress. Please wait for the build to finish.".into()
+                ));
+            }
+        }
+    }
+
     let log_path = get_log_path(&state.config);
     let trigger_path = get_trigger_path(&state.config);
 
