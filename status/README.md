@@ -89,6 +89,11 @@ Ensure your DNS provider (Cloudflare, Namecheap, Route53, etc.) has the correct 
    - **Alert us when**: `URL returns an unexpected status code (non-200)` or `Contains keyword: "operational"`
 4. Click **Create Monitor**.
 
+> [!CAUTION]
+> **Do NOT monitor the bare root domain (`https://media.yourdomain.com/`)!**
+> In a single unified domain setup, Caddy serves the static React frontend SPA files directly from disk (`/var/www/ownmediahost/dist`). If you point Better Stack to `https://media.yourdomain.com/`, Caddy will return `HTTP 200 OK` for `index.html` even if the Rust Axum backend is stopped (`sudo systemctl stop ownmediahost`)!
+> **You must always append `/health`** (`https://media.yourdomain.com/health`). Requests to `/health` are reverse-proxied to the Axum backend on `127.0.0.1:8080`. When the backend is stopped or crashes, Caddy returns `HTTP 502 Bad Gateway`, which immediately triggers Better Stack to register an outage and record downtime down to the second.
+
 > [!TIP]
 > OwnMediaHost exposes two specialized zero-overhead health endpoints:
 > - `GET /health`: Comprehensive health diagnostics (database connection status, disk space, uptime, media counts).

@@ -415,6 +415,21 @@ export const SettingsPage: React.FC = () => {
             {computedProbeUrl}
           </div>
 
+          <div
+            style={{
+              marginTop: '10px',
+              padding: '8px 12px',
+              borderRadius: '6px',
+              background: 'rgba(255, 159, 10, 0.08)',
+              border: '1px solid rgba(255, 159, 10, 0.25)',
+              fontSize: '11px',
+              color: '#ff9f0a',
+              lineHeight: 1.45,
+            }}
+          >
+            ⚠️ <strong>Critical:</strong> You must monitor <code>/health</code> (not the bare root domain <code>https://{unifiedDomain}</code>). In single domain mode, Caddy serves static frontend files with HTTP 200 even when the backend is stopped! Targeting <code>/health</code> ensures Caddy returns <code>HTTP 502 Bad Gateway</code> when the backend goes down to trigger downtime tracking.
+          </div>
+
           {deployMode === 'split' && (
             <div style={{ marginTop: '12px', borderTop: '1px dashed rgba(255, 255, 255, 0.1)', paddingTop: '12px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
