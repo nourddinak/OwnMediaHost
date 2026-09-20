@@ -29,6 +29,48 @@ export const SettingsPage: React.FC = () => {
   const [showUpdateModal, setShowUpdateModal] = useState(false);
   const [copiedUpdateCmd, setCopiedUpdateCmd] = useState(false);
 
+  // Section expand/collapse state with persistent localStorage
+  const [expandedSections, setExpandedSections] = useState<{
+    domain: boolean;
+    monitoring: boolean;
+    policies: boolean;
+  }>(() => {
+    try {
+      const saved = localStorage.getItem('ownmediahost_settings_sections');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch {
+      // ignore
+    }
+    return { domain: true, monitoring: true, policies: true };
+  });
+
+  const toggleSection = (key: 'domain' | 'monitoring' | 'policies') => {
+    setExpandedSections((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem('ownmediahost_settings_sections', JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  };
+
+  const allExpanded = expandedSections.domain && expandedSections.monitoring && expandedSections.policies;
+
+  const toggleAll = () => {
+    const nextVal = !allExpanded;
+    const next = { domain: nextVal, monitoring: nextVal, policies: nextVal };
+    setExpandedSections(next);
+    try {
+      localStorage.setItem('ownmediahost_settings_sections', JSON.stringify(next));
+    } catch {
+      // ignore
+    }
+  };
+
   // 1-Click Server Update states
   const [updatePhase, setUpdatePhase] = useState<'idle' | 'running' | 'reconnecting' | 'completed' | 'error'>('idle');
   const [updateLogs, setUpdateLogs] = useState<string>('');
@@ -308,33 +350,84 @@ export const SettingsPage: React.FC = () => {
             Configure domain routing topologies, Better Stack 24/7 out-of-band monitoring, media upload policies, and retention schedules.
           </p>
         </div>
-        <button
-          onClick={handleSave}
-          disabled={saving}
-          className="btn btn-primary press-scale settings-header-save-btn"
-          aria-label="Save Settings"
-        >
-          {saving ? 'Saving...' : 'Save Settings'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+          <button
+            type="button"
+            onClick={toggleAll}
+            className="btn btn-secondary press-scale"
+            style={{ fontSize: '12px', padding: '8px 14px' }}
+            title={allExpanded ? "Collapse all sections" : "Expand all sections"}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              style={{
+                transform: allExpanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                transition: 'transform 0.2s ease',
+              }}
+            >
+              <polyline points="7 13 12 18 17 13" />
+              <polyline points="7 6 12 11 17 6" />
+            </svg>
+            <span>{allExpanded ? 'Collapse All' : 'Expand All'}</span>
+          </button>
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="btn btn-primary press-scale settings-header-save-btn"
+            aria-label="Save Settings"
+          >
+            {saving ? 'Saving...' : 'Save Settings'}
+          </button>
+        </div>
       </div>
 
       {/* Card 1: Domain & Routing Architecture */}
-      <section className="settings-card">
-        <div className="settings-card-header">
-          <div>
+      <section className={`settings-card ${!expandedSections.domain ? 'collapsed' : ''}`}>
+        <div
+          className="settings-card-header"
+          onClick={() => toggleSection('domain')}
+          title={expandedSections.domain ? "Click to collapse section" : "Click to expand section"}
+        >
+          <div style={{ flex: 1, minWidth: '240px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <h2 className="settings-card-title">Domain & Routing Topology</h2>
               <span className="settings-badge">
                 {deployMode === 'unified' ? 'Single Unified Domain' : 'Split 2-Domain Mode'}
               </span>
+              {!expandedSections.domain && (
+                <span className="settings-badge-subtle" style={{ fontFamily: 'var(--font-mono)' }}>
+                  {deployMode === 'unified'
+                    ? (settings['domain'] || cleanUnifiedDomain || 'Not configured')
+                    : `${cleanFrontendDomain || 'UI'} + ${cleanBackendDomain || 'API'}`}
+                </span>
+              )}
             </div>
             <p className="settings-card-desc">
               Choose whether your server operates with a single unified domain or separates the React frontend dashboard and Axum API across two distinct domains.
             </p>
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 500 }}>
+              {expandedSections.domain ? 'Collapse' : 'Expand'}
+            </span>
+            <span className={`accordion-chevron ${expandedSections.domain ? 'expanded' : ''}`}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
+          </div>
         </div>
 
-        {/* Topology Choice Cards */}
+        {expandedSections.domain && (
+          <div className="settings-card-body">
+            {/* Topology Choice Cards */}
         <div className="settings-topology-grid">
           {/* Card 1: Single Unified Domain */}
           <div
@@ -470,42 +563,88 @@ export const SettingsPage: React.FC = () => {
             Prefix used for generated permanent asset links (<code>/f/...</code>, <code>/a/...</code>, <code>/thumbnails/...</code>). Automatically synchronized with your domain and HTTPS.
           </span>
         </div>
+          </div>
+        )}
       </section>
 
       {/* Card 2: Better Stack 24/7 Monitoring */}
-      <section className="settings-card">
-        <div className="settings-card-header">
+      <section className={`settings-card ${!expandedSections.monitoring ? 'collapsed' : ''}`}>
+        <div
+          className="settings-card-header"
+          onClick={() => toggleSection('monitoring')}
+          title={expandedSections.monitoring ? "Click to collapse section" : "Click to expand section"}
+        >
           <div style={{ flex: 1, minWidth: '240px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
               <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff', display: 'inline-block' }} />
               <h2 className="settings-card-title">Better Stack 24/7 Health Monitoring</h2>
+              {settings['status_page_url'] ? (
+                <span className="settings-status-badge connected">
+                  Connected
+                </span>
+              ) : (
+                <span className="settings-status-badge unlinked">
+                  Unlinked
+                </span>
+              )}
+              {!expandedSections.monitoring && (
+                <span className="settings-badge-subtle" style={{ fontFamily: 'var(--font-mono)' }}>
+                  {cleanUnifiedDomain}/health
+                </span>
+              )}
             </div>
             <p className="settings-card-desc">
               Configure independent out-of-band health probes and status pages that monitor your server uptime down to the second.
             </p>
           </div>
-          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={handleCopyProbe}
-              className="btn btn-secondary press-scale settings-btn-sm"
-            >
-              {copiedProbe ? '✓ Copied' : 'Copy Probe URL'}
-            </button>
-            <button
-              type="button"
-              onClick={handleTestProbe}
-              disabled={probing}
-              className="btn btn-secondary press-scale settings-btn-sm"
-            >
-              {probing ? 'Testing...' : 'Test Probe'}
-            </button>
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap', flexShrink: 0 }}>
+            {!expandedSections.monitoring && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCopyProbe();
+                }}
+                className="btn btn-secondary press-scale settings-btn-sm"
+              >
+                {copiedProbe ? '✓ Copied' : 'Copy Probe'}
+              </button>
+            )}
+            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 500 }}>
+              {expandedSections.monitoring ? 'Collapse' : 'Expand'}
+            </span>
+            <span className={`accordion-chevron ${expandedSections.monitoring ? 'expanded' : ''}`}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
+            </span>
           </div>
         </div>
 
-        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', display: 'block', marginBottom: '8px' }}>
-          Enter this URL into your Better Stack monitor (<strong>Uptime → Create Monitor</strong>):
-        </span>
+        {expandedSections.monitoring && (
+          <div className="settings-card-body">
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                Enter this URL into your Better Stack monitor (<strong>Uptime → Create Monitor</strong>):
+              </span>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={handleCopyProbe}
+                  className="btn btn-secondary press-scale settings-btn-sm"
+                >
+                  {copiedProbe ? '✓ Copied' : 'Copy Probe URL'}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleTestProbe}
+                  disabled={probing}
+                  className="btn btn-secondary press-scale settings-btn-sm"
+                >
+                  {probing ? 'Testing...' : 'Test Probe'}
+                </button>
+              </div>
+            </div>
 
         <div className="settings-code-box">
           {computedProbeUrl}
@@ -602,106 +741,136 @@ export const SettingsPage: React.FC = () => {
             className="settings-input"
           />
         </div>
+          </div>
+        )}
       </section>
 
       {/* Card 3: Media Upload Policies & Storage Retention */}
-      <section className="settings-card">
-        <div className="settings-card-header">
-          <div>
-            <h2 className="settings-card-title">Media Upload & Retention Policies</h2>
+      <section className={`settings-card ${!expandedSections.policies ? 'collapsed' : ''}`}>
+        <div
+          className="settings-card-header"
+          onClick={() => toggleSection('policies')}
+          title={expandedSections.policies ? "Click to collapse section" : "Click to expand section"}
+        >
+          <div style={{ flex: 1, minWidth: '240px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <h2 className="settings-card-title">Media Upload & Retention Policies</h2>
+              <span className="settings-badge">
+                {settings['trash_retention_days'] || '30'} Days Retention
+              </span>
+              {!expandedSections.policies && (
+                <span className="settings-badge-subtle">
+                  Dedup: {settings['duplicate_handling'] || 'allow'}
+                </span>
+              )}
+            </div>
             <p className="settings-card-desc">
               Manage duplicate SHA-256 deduplication, automatic recycle bin pruning, and file format whitelists.
             </p>
           </div>
-        </div>
-
-        <div className="settings-grid-2col">
-          {/* Duplicate Handling */}
-          <div>
-            <label className="settings-label">
-              Duplicate File Detection Mode
-            </label>
-            <span className="settings-hint" style={{ marginBottom: '6px' }}>
-              Action taken when an upload matches the SHA-256 hash of an existing file.
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+            <span style={{ fontSize: '11px', color: 'var(--text-tertiary)', fontWeight: 500 }}>
+              {expandedSections.policies ? 'Collapse' : 'Expand'}
             </span>
-            <select
-              value={settings['duplicate_handling'] || 'allow'}
-              onChange={(e) => handleChange('duplicate_handling', e.target.value)}
-              className="settings-select"
-            >
-              <option value="allow">Allow duplicates (Store multiple copies)</option>
-              <option value="reuse">Reuse existing (Return existing media object)</option>
-              <option value="reject">Reject duplicates (Return 409 Conflict)</option>
-            </select>
-          </div>
-
-          {/* Trash Retention */}
-          <div>
-            <label className="settings-label">
-              Trash Retention Period (Days)
-            </label>
-            <span className="settings-hint" style={{ marginBottom: '6px' }}>
-              Number of days deleted media stays in the recycle bin before permanent pruning.
+            <span className={`accordion-chevron ${expandedSections.policies ? 'expanded' : ''}`}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9" />
+              </svg>
             </span>
-            <input
-              type="number"
-              min="1"
-              max="365"
-              value={settings['trash_retention_days'] || '30'}
-              onChange={(e) => handleChange('trash_retention_days', e.target.value)}
-              className="settings-input"
-            />
           </div>
         </div>
 
-        {/* Allowed Image Formats */}
-        <div>
-          <label className="settings-label">
-            Allowed Image Formats
-          </label>
-          <span className="settings-hint" style={{ marginBottom: '6px' }}>
-            Comma-separated list of permitted image extensions (e.g. jpeg,jpg,png,webp,gif,avif,svg,bmp,ico,tiff,heic).
-          </span>
-          <input
-            type="text"
-            value={settings['allowed_image_formats'] || 'jpeg,jpg,png,webp,gif,avif,svg,bmp,ico,tiff,heic'}
-            onChange={(e) => handleChange('allowed_image_formats', e.target.value)}
-            placeholder="jpeg,jpg,png,webp,gif,avif,svg,bmp,ico,tiff,heic"
-            className="settings-input"
-          />
-        </div>
+        {expandedSections.policies && (
+          <div className="settings-card-body">
+            <div className="settings-grid-2col">
+              {/* Duplicate Handling */}
+              <div>
+                <label className="settings-label">
+                  Duplicate File Detection Mode
+                </label>
+                <span className="settings-hint" style={{ marginBottom: '6px' }}>
+                  Action taken when an upload matches the SHA-256 hash of an existing file.
+                </span>
+                <select
+                  value={settings['duplicate_handling'] || 'allow'}
+                  onChange={(e) => handleChange('duplicate_handling', e.target.value)}
+                  className="settings-select"
+                >
+                  <option value="allow">Allow duplicates (Store multiple copies)</option>
+                  <option value="reuse">Reuse existing (Return existing media object)</option>
+                  <option value="reject">Reject duplicates (Return 409 Conflict)</option>
+                </select>
+              </div>
 
-        {/* Allowed Video Formats */}
-        <div>
-          <label className="settings-label">
-            Allowed Video Formats
-          </label>
-          <span className="settings-hint" style={{ marginBottom: '6px' }}>
-            Comma-separated list of permitted video extensions (e.g. mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp).
-          </span>
-          <input
-            type="text"
-            value={settings['allowed_video_formats'] || 'mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp'}
-            onChange={(e) => handleChange('allowed_video_formats', e.target.value)}
-            placeholder="mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp"
-            className="settings-input"
-          />
-        </div>
+              {/* Trash Retention */}
+              <div>
+                <label className="settings-label">
+                  Trash Retention Period (Days)
+                </label>
+                <span className="settings-hint" style={{ marginBottom: '6px' }}>
+                  Number of days deleted media stays in the recycle bin before permanent pruning.
+                </span>
+                <input
+                  type="number"
+                  min="1"
+                  max="365"
+                  value={settings['trash_retention_days'] || '30'}
+                  onChange={(e) => handleChange('trash_retention_days', e.target.value)}
+                  className="settings-input"
+                />
+              </div>
+            </div>
 
-        {/* Bottom Save Button Row */}
-        <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
-          <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
-            Changes to domain topologies will prompt 1-click Caddy routing sync.
-          </span>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="btn btn-primary press-scale"
-            style={{ padding: '10px 24px', fontSize: '13px', fontWeight: 600, borderRadius: '8px' }}
-          >
-            {saving ? 'Saving...' : 'Save Settings'}
-          </button>
-        </div>
+            {/* Allowed Image Formats */}
+            <div>
+              <label className="settings-label">
+                Allowed Image Formats
+              </label>
+              <span className="settings-hint" style={{ marginBottom: '6px' }}>
+                Comma-separated list of permitted image extensions (e.g. jpeg,jpg,png,webp,gif,avif,svg,bmp,ico,tiff,heic).
+              </span>
+              <input
+                type="text"
+                value={settings['allowed_image_formats'] || 'jpeg,jpg,png,webp,gif,avif,svg,bmp,ico,tiff,heic'}
+                onChange={(e) => handleChange('allowed_image_formats', e.target.value)}
+                placeholder="jpeg,jpg,png,webp,gif,avif,svg,bmp,ico,tiff,heic"
+                className="settings-input"
+              />
+            </div>
+
+            {/* Allowed Video Formats */}
+            <div>
+              <label className="settings-label">
+                Allowed Video Formats
+              </label>
+              <span className="settings-hint" style={{ marginBottom: '6px' }}>
+                Comma-separated list of permitted video extensions (e.g. mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp).
+              </span>
+              <input
+                type="text"
+                value={settings['allowed_video_formats'] || 'mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp'}
+                onChange={(e) => handleChange('allowed_video_formats', e.target.value)}
+                placeholder="mp4,webm,mov,mkv,avi,wmv,flv,m4v,ts,3gp"
+                className="settings-input"
+              />
+            </div>
+
+            {/* Bottom Save Button Row */}
+            <div style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: '18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-tertiary)' }}>
+                Changes to domain topologies will prompt 1-click Caddy routing sync.
+              </span>
+              <button
+                onClick={handleSave}
+                disabled={saving}
+                className="btn btn-primary press-scale"
+                style={{ padding: '10px 24px', fontSize: '13px', fontWeight: 600, borderRadius: '8px' }}
+              >
+                {saving ? 'Saving...' : 'Save Settings'}
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Interactive Post-Save Domain Routing Sync Modal */}
@@ -967,14 +1136,65 @@ export const SettingsPage: React.FC = () => {
           display: flex;
           flex-direction: column;
           gap: 20px;
+          transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .settings-card.collapsed {
+          gap: 0;
+          padding: 18px 24px;
         }
 
         .settings-card-header {
           display: flex;
-          align-items: flex-start;
+          align-items: center;
           justify-content: space-between;
           gap: 16px;
           flex-wrap: wrap;
+          cursor: pointer;
+          user-select: none;
+        }
+
+        .settings-card-header:hover .settings-card-title {
+          color: #ffffff;
+        }
+
+        .accordion-chevron {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 26px;
+          height: 26px;
+          border-radius: 6px;
+          background: rgba(255, 255, 255, 0.05);
+          color: var(--text-secondary);
+          transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background 0.15s ease, color 0.15s ease;
+        }
+
+        .settings-card-header:hover .accordion-chevron {
+          background: rgba(255, 255, 255, 0.1);
+          color: #ffffff;
+        }
+
+        .accordion-chevron.expanded {
+          transform: rotate(180deg);
+        }
+
+        .settings-card-body {
+          display: flex;
+          flex-direction: column;
+          gap: 20px;
+          animation: accordionFade 0.2s ease-out;
+        }
+
+        @keyframes accordionFade {
+          from {
+            opacity: 0;
+            transform: translateY(-4px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
         }
 
         .settings-card-title {
@@ -1195,6 +1415,15 @@ export const SettingsPage: React.FC = () => {
           .settings-card {
             padding: 16px;
             gap: 16px;
+          }
+
+          .settings-card.collapsed {
+            padding: 14px 16px;
+            gap: 0;
+          }
+
+          .settings-card-header {
+            gap: 10px;
           }
 
           .settings-header-save-btn {
