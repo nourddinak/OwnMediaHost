@@ -81,6 +81,25 @@ async fn get_settings(
         map.insert(r.key, r.value);
     }
 
+    if !map.contains_key("deploy_mode") {
+        map.insert("deploy_mode".to_string(), std::env::var("DEPLOY_MODE").unwrap_or_else(|_| "unified".to_string()));
+    }
+    if !map.contains_key("domain") {
+        map.insert("domain".to_string(), std::env::var("DOMAIN").unwrap_or_default());
+    }
+    if !map.contains_key("frontend_domain") {
+        map.insert("frontend_domain".to_string(), std::env::var("FRONTEND_DOMAIN").unwrap_or_default());
+    }
+    if !map.contains_key("backend_domain") {
+        map.insert("backend_domain".to_string(), std::env::var("BACKEND_DOMAIN").unwrap_or_default());
+    }
+    if !map.contains_key("public_base_url") {
+        map.insert("public_base_url".to_string(), std::env::var("PUBLIC_BASE_URL").unwrap_or_default());
+    }
+    if !map.contains_key("status_page_url") {
+        map.insert("status_page_url".to_string(), std::env::var("STATUS_PAGE_URL").unwrap_or_default());
+    }
+
     Ok(Json(ApiResponse::ok(map)))
 }
 

@@ -137,6 +137,12 @@ async fn seed_initial_data(pool: &DbPool, config: &AppConfig) -> Result<(), AppE
         }
     }
 
+    let deploy_mode = std::env::var("DEPLOY_MODE").unwrap_or_else(|_| "unified".to_string());
+    let domain = std::env::var("DOMAIN").unwrap_or_default();
+    let frontend_domain = std::env::var("FRONTEND_DOMAIN").unwrap_or_default();
+    let backend_domain = std::env::var("BACKEND_DOMAIN").unwrap_or_default();
+    let status_page_url = std::env::var("STATUS_PAGE_URL").unwrap_or_default();
+
     // Default settings
     let default_settings = [
         ("max_image_size", config.max_image_size.to_string()),
@@ -146,6 +152,12 @@ async fn seed_initial_data(pool: &DbPool, config: &AppConfig) -> Result<(), AppE
         ("trash_retention_days", "30".to_string()),
         ("allowed_image_formats", config.allowed_image_formats.join(",")),
         ("allowed_video_formats", config.allowed_video_formats.join(",")),
+        ("public_base_url", config.public_base_url.clone()),
+        ("deploy_mode", deploy_mode),
+        ("domain", domain),
+        ("frontend_domain", frontend_domain),
+        ("backend_domain", backend_domain),
+        ("status_page_url", status_page_url),
     ];
 
     for (k, v) in default_settings {
