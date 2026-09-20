@@ -272,6 +272,9 @@ export const api = {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', `${API_BASE}/files`);
       xhr.withCredentials = true;
+      // 10 minute timeout: large files need time for upload + server-side
+      // SHA-256 hashing and thumbnail generation (especially 4K images).
+      xhr.timeout = 600_000;
 
       const token = getStoredToken();
       if (token) {
@@ -286,20 +289,54 @@ export const api = {
         };
       }
 
-      xhr.onload = () => {
+      // Guard against double-resolve/reject
+      let settled = false;
+
+      const parseResponse = (): { ok: boolean; data?: any; error?: string } => {
         try {
           const json = JSON.parse(xhr.responseText);
           if (xhr.status >= 200 && xhr.status < 300 && json.success) {
-            resolve(json.data);
-          } else {
-            reject(new Error(json.error?.message || `Upload failed with status ${xhr.status}`));
+            return { ok: true, data: json.data };
           }
+          return { ok: false, error: json.error?.message || `Upload failed with status ${xhr.status}` };
         } catch {
-          reject(new Error('Invalid response from server'));
+          // If status is 2xx but body isn't parseable, treat as success
+          // (server processed the file but response body was truncated/empty).
+          if (xhr.status >= 200 && xhr.status < 300) {
+            return { ok: true, data: { url: '' } };
+          }
+          return { ok: false, error: `Invalid response from server (HTTP ${xhr.status})` };
         }
       };
 
-      xhr.onerror = () => reject(new Error('Network error during upload'));
+      xhr.onload = () => {
+        if (settled) return;
+        settled = true;
+        const result = parseResponse();
+        if (result.ok) {
+          resolve(result.data);
+        } else {
+          reject(new Error(result.error));
+        }
+      };
+
+      xhr.onerror = () => {
+        if (settled) return;
+        settled = true;
+        reject(new Error('Network error during upload'));
+      };
+
+      xhr.ontimeout = () => {
+        if (settled) return;
+        settled = true;
+        reject(new Error('Upload timed out. The file may still have been saved on the server.'));
+      };
+
+      xhr.onabort = () => {
+        if (settled) return;
+        settled = true;
+        reject(new Error('Upload was aborted'));
+      };
 
       const formData = new FormData();
       formData.append('file', file);

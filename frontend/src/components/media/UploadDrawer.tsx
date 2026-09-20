@@ -153,6 +153,9 @@ export const UploadDrawer: React.FC<UploadDrawerProps> = ({
         prev.map((f) => (f.id === item.id ? { ...f, status: 'uploading', progress: 0 } : f))
       );
 
+      // Track upload progress outside React state for the verification check
+      let lastProgress = 0;
+
       try {
         // Fast-path: For images, upload directly to let backend generate SIMD thumbnails in 1ms.
         // For videos, run lightweight inspection for dimension & poster capture.
@@ -171,6 +174,7 @@ export const UploadDrawer: React.FC<UploadDrawerProps> = ({
           height: meta.height,
           duration: meta.duration,
           onProgress: (percent) => {
+            lastProgress = percent;
             setFiles((prev) =>
               prev.map((f) => (f.id === item.id ? { ...f, progress: percent } : f))
             );
@@ -184,6 +188,28 @@ export const UploadDrawer: React.FC<UploadDrawerProps> = ({
           prev.map((f) => (f.id === item.id ? { ...f, status: 'completed', progress: 100 } : f))
         );
       } catch (err: any) {
+        // If all bytes were sent (progress hit 100%) but we got an error,
+        // the server likely saved the file but the response was lost
+        // (e.g. reverse proxy timeout). Verify with a search.
+        if (lastProgress >= 100) {
+          try {
+            await new Promise((r) => setTimeout(r, 2000));
+            const check = await api.listFiles({ search: item.file.name, limit: 1 });
+            if (check.items.length > 0) {
+              successfulUploadCount++;
+              lastUploadedUrl = check.items[0].url;
+              setFiles((prev) =>
+                prev.map((f) =>
+                  f.id === item.id ? { ...f, status: 'completed', progress: 100 } : f
+                )
+              );
+              continue;
+            }
+          } catch {
+            // Verification itself failed; fall through to mark as failed
+          }
+        }
+
         setFiles((prev) =>
           prev.map((f) =>
             f.id === item.id

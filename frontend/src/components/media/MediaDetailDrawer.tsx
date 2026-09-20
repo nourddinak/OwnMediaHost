@@ -177,11 +177,6 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
               overflow: 'hidden',
               background: '#070708',
               border: '1px solid var(--border-subtle)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              minHeight: '220px',
-              maxHeight: '320px',
               position: 'relative',
             }}
           >
@@ -190,14 +185,26 @@ export const MediaDetailDrawer: React.FC<MediaDetailDrawerProps> = ({
                 key={media.url}
                 src={media.url}
                 controls
-                style={{ width: '100%', maxHeight: '320px', objectFit: 'contain' }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  maxHeight: '70vh',
+                  objectFit: 'contain',
+                  background: '#070708',
+                }}
               />
             ) : (
               <img
                 key={media.url}
                 src={media.url}
                 alt={media.filename}
-                style={{ maxWidth: '100%', maxHeight: '320px', objectFit: 'contain' }}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  height: 'auto',
+                  objectFit: 'contain',
+                  background: '#070708',
+                }}
               />
             )}
           </div>
