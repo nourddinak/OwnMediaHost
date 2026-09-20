@@ -30,10 +30,13 @@ pub struct SystemState {
 pub struct UpdateCheckResponse {
     pub has_update: bool,
     pub release_ready: bool,
+    pub is_building: bool,
     pub current_commit: String,
     pub current_short_commit: String,
     pub latest_commit: String,
     pub latest_short_commit: String,
+    pub release_commit: String,
+    pub release_short_commit: String,
     pub commit_message: String,
     pub author: String,
     pub published_at: String,
@@ -270,27 +273,52 @@ async fn check_for_updates(
         latest_commit.clone()
     };
 
-    // A release is ready if the latest GitHub commit matches the latest release assets commit
+    let release_short_commit = if release_commit.len() >= 7 {
+        release_commit[..7].to_string()
+    } else {
+        release_commit.clone()
+    };
+
+    // A release is ready if the latest published release matches the latest commit on main
     let release_ready = !release_commit.is_empty() && (
-        release_commit == latest_commit || latest_commit.starts_with(&release_commit) || release_commit.starts_with(&latest_commit)
+        release_commit == latest_commit ||
+        latest_commit.starts_with(&release_commit) ||
+        release_commit.starts_with(&latest_commit)
     );
 
-    // Has update if latest commit differs from current installed commit
-    let has_update = !current_commit.is_empty() &&
+    // Has a new commit on main branch that is not installed on this instance
+    let new_commit_on_main = !current_commit.is_empty() &&
         !latest_commit.is_empty() &&
         current_commit != latest_commit &&
         !current_commit.starts_with(&latest_short_commit) &&
         !latest_commit.starts_with(&current_short_commit);
+
+    // A newer release is published and available for download than what is currently installed
+    let newer_release_available = !release_commit.is_empty() &&
+        current_commit != release_commit &&
+        !current_commit.starts_with(&release_short_commit) &&
+        !release_commit.starts_with(&current_short_commit);
+
+    // Is CI/CD currently compiling and packaging?
+    // If a new commit is on main, but the release doesn't have it yet, CI is actively building.
+    let is_building = new_commit_on_main && !release_ready;
+
+    // The user should ONLY receive an update notification and be allowed to install
+    // when a newer release is actually built, published, and downloadable!
+    let has_update = newer_release_available;
 
     let checked_at = chrono::Utc::now().to_rfc3339();
 
     let response = UpdateCheckResponse {
         has_update,
         release_ready,
+        is_building,
         current_commit,
         current_short_commit,
         latest_commit,
         latest_short_commit,
+        release_commit,
+        release_short_commit,
         commit_message,
         author,
         published_at,

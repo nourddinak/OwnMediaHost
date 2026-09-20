@@ -192,10 +192,13 @@ async function request<T>(endpoint: string, options: RequestInit = {}): Promise<
 export interface UpdateCheckResponse {
   has_update: boolean;
   release_ready: boolean;
+  is_building: boolean;
   current_commit: string;
   current_short_commit: string;
   latest_commit: string;
   latest_short_commit: string;
+  release_commit: string;
+  release_short_commit: string;
   commit_message: string;
   author: string;
   published_at: string;

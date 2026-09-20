@@ -191,9 +191,15 @@ export const UpdatesPage: React.FC = () => {
             style={{
               background: updateInfo?.has_update
                 ? 'linear-gradient(135deg, rgba(255, 159, 10, 0.12), rgba(255, 100, 0, 0.04))'
+                : updateInfo?.is_building
+                ? 'linear-gradient(135deg, rgba(10, 132, 255, 0.12), rgba(255, 159, 10, 0.06))'
                 : 'linear-gradient(135deg, rgba(48, 209, 88, 0.1), rgba(0, 122, 255, 0.03))',
               border: `1px solid ${
-                updateInfo?.has_update ? 'rgba(255, 159, 10, 0.3)' : 'rgba(48, 209, 88, 0.25)'
+                updateInfo?.has_update
+                  ? 'rgba(255, 159, 10, 0.3)'
+                  : updateInfo?.is_building
+                  ? 'rgba(10, 132, 255, 0.3)'
+                  : 'rgba(48, 209, 88, 0.25)'
               }`,
               borderRadius: '12px',
               padding: '24px',
@@ -210,11 +216,19 @@ export const UpdatesPage: React.FC = () => {
                   width: '48px',
                   height: '48px',
                   borderRadius: '12px',
-                  background: updateInfo?.has_update ? 'rgba(255, 159, 10, 0.2)' : 'rgba(48, 209, 88, 0.2)',
+                  background: updateInfo?.has_update
+                    ? 'rgba(255, 159, 10, 0.2)'
+                    : updateInfo?.is_building
+                    ? 'rgba(10, 132, 255, 0.2)'
+                    : 'rgba(48, 209, 88, 0.2)',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  color: updateInfo?.has_update ? '#ff9f0a' : '#30d158',
+                  color: updateInfo?.has_update
+                    ? '#ff9f0a'
+                    : updateInfo?.is_building
+                    ? '#0a84ff'
+                    : '#30d158',
                 }}
               >
                 {updateInfo?.has_update ? (
@@ -222,6 +236,13 @@ export const UpdatesPage: React.FC = () => {
                     <circle cx="12" cy="12" r="10" />
                     <line x1="12" y1="8" x2="12" y2="12" />
                     <line x1="12" y1="16" x2="12.01" y2="16" />
+                  </svg>
+                ) : updateInfo?.is_building ? (
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ animation: 'spin 3s linear infinite' }}>
+                    <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                    <path d="M3 3v5h5" />
+                    <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+                    <path d="M16 21h5v-5" />
                   </svg>
                 ) : (
                   <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -233,7 +254,11 @@ export const UpdatesPage: React.FC = () => {
               <div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <h2 style={{ fontSize: '17px', fontWeight: 600, margin: 0, color: 'var(--text-primary)' }}>
-                    {updateInfo?.has_update ? 'New Update Available!' : 'Your Server is Up to Date'}
+                    {updateInfo?.has_update
+                      ? 'New Update Available!'
+                      : updateInfo?.is_building
+                      ? 'Release Build in Progress'
+                      : 'Your Server is Up to Date'}
                   </h2>
                   <span
                     style={{
@@ -241,22 +266,36 @@ export const UpdatesPage: React.FC = () => {
                       fontWeight: 600,
                       padding: '2px 8px',
                       borderRadius: '10px',
-                      background: updateInfo?.has_update ? 'rgba(255, 159, 10, 0.2)' : 'rgba(48, 209, 88, 0.2)',
-                      color: updateInfo?.has_update ? '#ff9f0a' : '#30d158',
+                      background: updateInfo?.has_update
+                        ? 'rgba(255, 159, 10, 0.2)'
+                        : updateInfo?.is_building
+                        ? 'rgba(10, 132, 255, 0.2)'
+                        : 'rgba(48, 209, 88, 0.2)',
+                      color: updateInfo?.has_update
+                        ? '#ff9f0a'
+                        : updateInfo?.is_building
+                        ? '#0a84ff'
+                        : '#30d158',
                     }}
                   >
-                    {updateInfo?.has_update ? 'RELEASE PENDING' : 'LATEST'}
+                    {updateInfo?.has_update
+                      ? 'READY TO INSTALL'
+                      : updateInfo?.is_building
+                      ? 'BUILDING IN CI/CD'
+                      : 'LATEST'}
                   </span>
                 </div>
                 <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'var(--text-secondary)' }}>
                   {updateInfo?.has_update
-                    ? `A new version (${updateInfo.latest_short_commit}) has been published to GitHub.`
+                    ? `Release ${updateInfo.release_short_commit || updateInfo.latest_short_commit} has finished compiling and is ready for 1-click install.`
+                    : updateInfo?.is_building
+                    ? `Commit ${updateInfo.latest_short_commit} was pushed to main. GitHub Actions is compiling release binaries (~2 min).`
                     : `Running commit ${updateInfo?.current_short_commit || 'latest'} • All services are synchronized.`}
                 </p>
               </div>
             </div>
 
-            {updateInfo?.has_update && (
+            {updateInfo?.has_update ? (
               <button
                 onClick={handleTriggerUpdate}
                 disabled={updatePhase === 'running' || updatePhase === 'reconnecting'}
@@ -283,7 +322,27 @@ export const UpdatesPage: React.FC = () => {
                 </svg>
                 {updatePhase === 'running' || updatePhase === 'reconnecting' ? 'Updating...' : 'Update Server Now (~5s)'}
               </button>
-            )}
+            ) : updateInfo?.is_building ? (
+              <button
+                disabled
+                style={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  color: 'var(--text-tertiary)',
+                  border: '1px solid var(--border-subtle)',
+                  borderRadius: '8px',
+                  padding: '10px 18px',
+                  fontWeight: 500,
+                  fontSize: '13px',
+                  cursor: 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <div className="spinner" style={{ width: '14px', height: '14px' }} />
+                Building Release... (~2m)
+              </button>
+            ) : null}
           </div>
 
           {/* Details Grid */}
@@ -332,7 +391,7 @@ export const UpdatesPage: React.FC = () => {
               </h3>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Latest Release SHA</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>Branch 'main'</span>
                   <a
                     href={`https://github.com/nourddinak/OwnMediaHost/commit/${updateInfo?.latest_commit}`}
                     target="_blank"
@@ -343,19 +402,29 @@ export const UpdatesPage: React.FC = () => {
                   </a>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Release Build Status</span>
-                  <span
-                    style={{
-                      color: updateInfo?.release_ready ? '#30d158' : '#ff9f0a',
-                      fontWeight: 500,
-                    }}
-                  >
-                    {updateInfo?.release_ready ? '✓ Binaries Ready' : '⏳ Building Release...'}
+                  <span style={{ color: 'var(--text-secondary)' }}>Published Release</span>
+                  <span style={{ fontFamily: 'monospace', color: 'var(--text-primary)' }}>
+                    {updateInfo?.release_short_commit || 'latest'}
                   </span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}>
-                  <span style={{ color: 'var(--text-secondary)' }}>Branch</span>
-                  <span style={{ color: 'var(--text-primary)' }}>main</span>
+                  <span style={{ color: 'var(--text-secondary)' }}>Release Build Status</span>
+                  <span
+                    style={{
+                      color: updateInfo?.release_ready
+                        ? '#30d158'
+                        : updateInfo?.is_building
+                        ? '#0a84ff'
+                        : '#ff9f0a',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {updateInfo?.release_ready
+                      ? '✓ Binaries Ready'
+                      : updateInfo?.is_building
+                      ? '⏳ Compiling in CI/CD...'
+                      : 'Pending Build'}
+                  </span>
                 </div>
               </div>
             </div>
