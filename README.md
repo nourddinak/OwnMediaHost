@@ -113,28 +113,44 @@ OwnMediaHost gives you a dedicated bare-metal alternative to Cloudinary, ImageKi
 
 ---
 
-## Architecture
+## Architecture & Domain Routing
+
+OwnMediaHost supports two production routing topologies, both backed by an out-of-band Better Stack status platform:
 
 ```text
-                      Client (Browser, Mobile, CLI, API)
-                                      │
-                                      ▼
-                         Caddy Web Server (Auto-SSL)
-                         (Port 80/443, Let's Encrypt)
-                                      │
-       ┌──────────────────────────────┼──────────────────────────────┐
-       ▼                              ▼                              ▼
-Static SPA Frontend          Decoupled Status Page          Backend API & Media
-(/var/www/.../dist)          (/var/www/.../status)            (127.0.0.1:8080)
-       │                              │                              │
-       │                              │                     Axum Rust Native Service
-       │                              │                  (systemd: ownmediahost.service)
-       │                              │                              │
-       │                              │                     ┌────────┴────────┐
-       │                              │                     ▼                 ▼
-       ▼                              ▼               SQLite WAL Mode    File Storage
-React Dashboard SPA          Public Status Page       (/var/lib/media.db) (/var/lib/storage)
-(Apple Obsidian Dark UI)     (Zero-Dependency Telemetry)
+                                  Client Request
+                                         │
+                 ┌───────────────────────┴───────────────────────┐
+                 ▼                                               ▼
+     Topology A: Unified Domain                      Topology B: Split 2-Domain
+    (media.yourdomain.com)                          (media.yourdomain.com + api.yourdomain.com)
+                 │                                               │
+                 ▼                                               ▼
+   ┌──────────────────────────┐                    ┌──────────────────────────┐
+   │       Caddy Server       │                    │       Caddy Server       │
+   │  ┌────────────────────┐  │                    │  ┌────────────────────┐  │
+   │  │ /                  │  │                    │  │ media.yourdomain   │  │
+   │  │ React SPA Frontend │  │                    │  │ React SPA Frontend │  │
+   │  ├────────────────────┤  │                    │  ├────────────────────┤  │
+   │  │ /api, /f, /health  │  │                    │  │ api.yourdomain     │  │
+   │  │ Axum Rust Backend  │  │                    │  │ Axum Rust Backend  │  │
+   │  └────────────────────┘  │                    │  └────────────────────┘  │
+   └─────────────┬────────────┘                    └─────────────┬────────────┘
+                 │                                               │
+                 ▼                                               ▼
+     ┌───────────────────────┐                       ┌───────────────────────┐
+     │ Axum Engine (127.0.0.1)│                      │ Axum Engine (127.0.0.1)│
+     │ SQLite WAL + Storage  │                       │ SQLite WAL + Storage  │
+     └───────────────────────┘                       └───────────────────────┘
+                 ▲                                               ▲
+                 │                                               │
+                 │ 24/7 Health Probes (GET /health)              │ 24/7 Health Probes (GET /health)
+                 │                                               │
+   ┌─────────────┴───────────────────────────────────────────────┴────────────┐
+   │             Out-of-Band Public Status Page (status.yourdomain.com)       │
+   │            Hosted on Better Stack Global Edge (DNS CNAME Isolated)       │
+   │            Survives Total VPS Blackouts • 100% Automated Downtime Logs   │
+   └──────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -159,14 +175,34 @@ curl -fsSL https://raw.githubusercontent.com/nourddinak/OwnMediaHost/main/script
 
 > **Note:** `sudo bash <(curl ...)` does not work on Linux because sudo cannot access the process substitution file descriptor. Use Option B instead.
 
+### DNS Pre-Requisites
+
+Before or immediately after running the installer, configure your DNS records:
+
+#### Setup 1: Single Unified Domain (Recommended)
+| Record Type | Name / Host | Target / Value | Purpose |
+| :--- | :--- | :--- | :--- |
+| `A` / `AAAA` | `media` | `<YOUR_VPS_IP>` | Serves both React dashboard UI and media streaming APIs |
+| `CNAME` | `status` | `statuspage.betteruptime.com` | Dedicated out-of-band Better Stack status page |
+
+#### Setup 2: Split 2-Domain Architecture
+| Record Type | Name / Host | Target / Value | Purpose |
+| :--- | :--- | :--- | :--- |
+| `A` / `AAAA` | `media` | `<YOUR_VPS_IP>` | Dedicated static React dashboard UI |
+| `A` / `AAAA` | `api` | `<YOUR_VPS_IP>` | Dedicated Rust Axum API and media streaming backend |
+| `CNAME` | `status` | `statuspage.betteruptime.com` | Dedicated out-of-band Better Stack status page |
+
 ### What the Deploy Bot Does Automatically:
 
 1. **Self-Bootstrapping**: If executed on a fresh server, it automatically installs `git` and `curl`, clones the repository into `/opt/ownmediahost`, and switches into the project folder.
 2. **Interactive Configuration Wizard**:
-   - Prompts for **Single Unified Domain** (e.g. `media.yourdomain.com` serving both frontend UI and media streaming APIs) or **Split Domains** (`media.yourdomain.com` for UI + `api.yourdomain.com` for API).
-   - Prompts for internal backend port (default: `8080`, with active port collision checking).
-   - Prompts for persistent storage path (default: `/var/lib/ownmediahost/storage`).
-   - Prompts for initial administrator email and password (or auto-generates a secure password).
+   - **Domain Routing Choice**:
+     - **[1] Single Domain (Recommended)**: e.g. `media.yourdomain.com`. Caddy serves the React dashboard at `/` and reverse-proxies `/api/*`, `/f/*`, `/a/*`, `/thumbnails/*`, `/private/*`, and `/health` to the Rust Axum backend on a single domain. Zero cross-domain CORS issues, single SSL certificate.
+     - **[2] Separate Domains (Split)**: e.g. `media.yourdomain.com` for Frontend UI and `api.yourdomain.com` for Backend API. Configures Caddy virtual hosts for each domain and automatically sets up cross-origin CORS headers.
+   - **Public Status Domain / URL**: Prompts for `status.yourdomain.com` or Better Stack status URL to link directly to your out-of-band status page.
+   - **Internal Backend Port**: Default `8080`, with active port collision checking.
+   - **Persistent Storage Path**: Default `/var/lib/ownmediahost/storage`.
+   - **Initial Administrator Account**: Prompts for admin email and password (or auto-generates a high-entropy password).
 3. **Automated Dependency Provisioning**:
    - Installs native system build tools and SQLite3 (`build-essential`, `pkg-config`, `libssl-dev`, `libsqlite3-dev`, `sqlite3`). No external multimedia CLI binaries required.
    - Checks and installs Node.js v22 (LTS) via official NodeSource repository if missing or `< v20`.
@@ -174,7 +210,7 @@ curl -fsSL https://raw.githubusercontent.com/nourddinak/OwnMediaHost/main/script
 4. **Caddy Reverse Proxy & Automatic SSL**:
    - Installs official Caddy v2 if missing.
    - Backs up your existing `/etc/caddy/Caddyfile` with a timestamp.
-   - Cleanly injects the reverse-proxy block with unbuffered streaming (`flush_interval -1`), routing all `/api/*`, `/f/*`, `/a/*`, `/thumbnails/*`, and `/private/*` requests to the Axum backend while serving the React dashboard SPA at `/` with automatic HTTPS.
+   - Injects the reverse-proxy block with unbuffered streaming (`flush_interval -1`), routing streaming uploads and media endpoints with automatic HTTPS via Let's Encrypt.
 5. **Instant Precompiled Binary Deployment**:
    - Downloads precompiled, optimized Linux x86_64 Rust release binaries and React dashboard assets directly from GitHub Releases in ~5 seconds (bypassing 15-minute VPS compilation and memory spikes). Seamlessly falls back to local source compilation if requested with `--build-from-source` or if offline.
 6. **Systemd Daemon & Cryptographic Hardening**:
@@ -254,70 +290,72 @@ sudo bash /opt/ownmediahost/scripts/reset-password.sh "MyNewSecurePassword2026!"
 
 ### 🌐 Public Status Page & Out-of-Band Incident Monitoring
 
-To prevent downtime from becoming a trust crisis, OwnMediaHost features a fully decoupled, out-of-band status page platform ([OwnMediaHost-status](https://github.com/nourddinak/OwnMediaHost-status)).
+OwnMediaHost integrates with **Better Stack** to provide a 100% automated, out-of-band status page platform running on a dedicated DNS CNAME (`status.yourdomain.com`).
 
-Hosting a status page on the same server as your application is an anti-pattern: when your app server or database crashes, your status page crashes with it. By deploying your status page to **GitHub Pages' global CDN**, your status monitoring remains 100% online even during complete server blackouts.
+Hosting a status page on the same server as your application is an anti-pattern: when your app server, database, or network crashes, your status page crashes with it. By pointing `status.yourdomain.com` directly to Better Stack's global edge network, your status monitoring remains 100% online even during complete VPS blackouts.
 
 ```text
 ┌────────────────────────────────────────┐       ┌────────────────────────────────────────┐
-│  Decoupled Status Page (GitHub Pages)  │       │    Primary OwnMediaHost Application    │
-│  https://<user>.github.io/status       │       │    https://media.yourdomain.com        │
+│  Out-of-Band Status (Better Stack Edge)│       │    OwnMediaHost VPS (Bare-Metal)       │
+│  https://status.yourdomain.com         │       │    (Single Domain or Split 2-Domain)   │
 │                                        │       │                                        │
-│  • Pure static HTML5 / CSS / Vanilla JS│       │  • Rust Axum Native Engine             │
-│  • 100% Free global CDN hosting        │       │  • SQLite WAL Database                 │
-│  • Survives VPS & network outages      │       │  • Reverse Proxy (Caddy / Auto-HTTPS)  │
+│  • 100% Automated 24/7 Probing         │       │  • Unified: media.yourdomain.com       │
+│  • Exact Downtime Tracking to second   │       │  • Split:   api.yourdomain.com         │
+│  • Survives Complete VPS Blackouts     │       │  • Axum Rust Engine + SQLite WAL       │
+│  • Native Obsidian Dark Aesthetic      │       │  • Zero-Overhead GET /health Endpoint  │
 └───────────────────┬────────────────────┘       └───────────────────┬────────────────────┘
                     │                                                │
-                    │      Client Browser Probes GET /health         │
+                    │      24/7 Automated Probes to GET /health      │
                     └───────────────────────────────────────────────►│
 ```
 
-#### Choose Your Deployment Method:
+#### Monitoring Targets by Domain Setup:
 
-##### Option A: Zero-Setup Instant Status (No Forking Required)
+- **Topology A: Single Unified Domain (`media.yourdomain.com`)**:
+  - Better Stack Monitor URL: `https://media.yourdomain.com/health`
+  - Caddy forwards `/health` to Axum on `127.0.0.1:8080`.
+- **Topology B: Split 2-Domain Architecture (`media.yourdomain.com` UI + `api.yourdomain.com` API)**:
+  - Better Stack Primary Backend Monitor: `https://api.yourdomain.com/health` (monitors Rust backend, database connection, and storage).
+  - Optional Frontend UI Monitor: `https://media.yourdomain.com/` (monitors Caddy static file delivery).
 
-You don't even need to fork the repository or configure GitHub Pages if you don't want to! You can use the official hosted status page:
+#### DNS Configuration:
 
-1. On your VPS, allow the hosted status origin:
+##### Single Unified Domain Setup:
+| Type | Host | Target / Value | Purpose |
+| :--- | :--- | :--- | :--- |
+| `A` / `AAAA` | `media` | `<YOUR_VPS_IP>` | Dashboard UI and API endpoints |
+| `CNAME` | `status` | `statuspage.betteruptime.com` | Isolated Better Stack status edge |
+
+##### Split 2-Domain Setup:
+| Type | Host | Target / Value | Purpose |
+| :--- | :--- | :--- | :--- |
+| `A` / `AAAA` | `media` | `<YOUR_VPS_IP>` | Static React dashboard UI |
+| `A` / `AAAA` | `api` | `<YOUR_VPS_IP>` | Rust Axum API and media streaming |
+| `CNAME` | `status` | `statuspage.betteruptime.com` | Isolated Better Stack status edge |
+
+#### Quick Setup:
+
+1. **Create Better Stack Monitor**:
+   - Sign up for a free account at [betterstack.com](https://betterstack.com/).
+   - Add monitor URL (`https://media.yourdomain.com/health` or `https://api.yourdomain.com/health`).
+2. **Create Status Page & Custom Domain**:
+   - Create a status page in Better Stack, set dark theme, and configure custom domain `status.yourdomain.com`.
+   - Add the `status` CNAME record in your DNS provider pointing to `statuspage.betteruptime.com`.
+3. **Connect OwnMediaHost Server**:
    ```bash
-   sudo bash /opt/ownmediahost/scripts/connect-status.sh "https://nourddinak.github.io/OwnMediaHost-status/"
+   # Direct 1-line connection:
+   sudo bash /opt/ownmediahost/scripts/connect-status.sh "https://status.yourdomain.com"
    ```
-2. Link your users directly to your instance with the `?api=` parameter:
-   ```text
-   https://nourddinak.github.io/OwnMediaHost-status/?api=https://media.yourdomain.com
-   ```
-   Because probing happens client-side in the visitor's browser, the status page will dynamically probe your backend, measure live latency, and display your operational status!
-
-##### Option B: Fork & Deploy to Your Own GitHub Pages or Custom Domain
-
-1. Fork or use the template: [github.com/nourddinak/OwnMediaHost-status](https://github.com/nourddinak/OwnMediaHost-status).
-2. Go to **Settings** → **Pages** → under **Source**, select **GitHub Actions**.
-3. Trigger the preconfigured workflow under the **Actions** tab.
-4. (Optional) In **Settings** → **Pages**, configure a custom domain like `status.yourdomain.com`.
-
-#### Connect Your Backend to the Status Page
-
-Run the automated connection utility on your server:
-
-```bash
-# Interactive mode (prompts for your status page URL):
-sudo bash /opt/ownmediahost/scripts/connect-status.sh
-
-# Direct 1-line connection:
-sudo bash /opt/ownmediahost/scripts/connect-status.sh "https://nourddinak.github.io/OwnMediaHost-status/"
-
-# Or pass via flag:
-sudo bash /opt/ownmediahost/scripts/connect-status.sh --url "https://status.yourdomain.com"
-```
 
 The script automatically:
-- Whitelists the status page domain in `ALLOWED_ORIGINS` for cross-origin browser probes.
+- Whitelists `https://status.yourdomain.com` in `ALLOWED_ORIGINS` for CORS compliance.
 - Saves `STATUS_PAGE_URL` in `/etc/ownmediahost/ownmediahost.env`.
 - Synchronizes the status URL into the platform SQLite `settings` table.
-- Restarts the backend service to apply CORS policies.
-- Validates the live `/health` telemetry endpoint and performs a synthetic CORS preflight test.
+- Restarts `ownmediahost.service` to apply changes.
+- Validates the `/health` endpoint and tests connectivity.
+- Links the Sidebar status indicator in the React dashboard directly to `status.yourdomain.com`.
 
-#### 3. Test & Manage Connection
+#### Test & Verify Connection:
 
 ```bash
 # Verify live telemetry & CORS probe response:
@@ -325,6 +363,21 @@ sudo bash /opt/ownmediahost/scripts/connect-status.sh --test
 
 # Disconnect / unlink public status page:
 sudo bash /opt/ownmediahost/scripts/connect-status.sh --disconnect
+```
+
+#### Built-in Forwarding (`/status/`):
+
+If any user navigates to `https://media.yourdomain.com/status/` (or `https://api.yourdomain.com/status/`), the server automatically redirects them to your public `https://status.yourdomain.com` status page.
+
+#### Outage Simulation Test:
+
+```bash
+# Simulate an outage by stopping the backend service:
+sudo systemctl stop ownmediahost
+
+# Within 3 minutes, Better Stack marks status.yourdomain.com as Degraded/Down.
+# Restart service to verify automatic recovery and downtime duration logging:
+sudo systemctl start ownmediahost
 ```
 
 ### Complete Platform Uninstallation
